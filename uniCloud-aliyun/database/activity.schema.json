@@ -1,0 +1,123 @@
+{
+  "bsonType": "object",
+  "required": ["title", "type", "startTime", "endTime", "status"],
+  "permission": {
+    "read": true,
+    "create": "auth.permission.contains('ADMIN')",
+    "update": "auth.permission.contains('ADMIN')",
+    "delete": "auth.permission.contains('ADMIN')"
+  },
+  "properties": {
+    "_id": {
+      "description": "ID，系统自动生成"
+    },
+    "title": {
+      "bsonType": "string",
+      "title": "活动标题",
+      "description": "活动标题",
+      "trim": "both"
+    },
+    "type": {
+      "bsonType": "int",
+      "title": "活动类型",
+      "description": "1-限时折扣 2-满减活动 3-优惠券",
+      "enum": [
+        {
+          "value": 1,
+          "text": "限时折扣"
+        },
+        {
+          "value": 2,
+          "text": "满减活动"
+        },
+        {
+          "value": 3,
+          "text": "优惠券"
+        }
+      ]
+    },
+    "image": {
+      "bsonType": "string",
+      "title": "活动图片",
+      "description": "活动展示图片",
+      "trim": "both"
+    },
+    "description": {
+      "bsonType": "string",
+      "title": "活动描述",
+      "description": "活动详细描述",
+      "trim": "both"
+    },
+    "discount": {
+      "bsonType": "double",
+      "title": "折扣",
+      "description": "限时折扣时使用，如0.8表示8折"
+    },
+    "fullAmount": {
+      "bsonType": "double",
+      "title": "满减金额",
+      "description": "满减活动时使用，满多少元"
+    },
+    "reduceAmount": {
+      "bsonType": "double",
+      "title": "减多少",
+      "description": "满减活动时使用，减多少元"
+    },
+    "couponValue": {
+      "bsonType": "double",
+      "title": "优惠券金额",
+      "description": "优惠券金额"
+    },
+    "couponMinAmount": {
+      "bsonType": "double",
+      "title": "最低使用金额",
+      "description": "优惠券最低使用金额"
+    },
+    "startTime": {
+      "bsonType": "timestamp",
+      "title": "开始时间",
+      "description": "活动开始时间"
+    },
+    "endTime": {
+      "bsonType": "timestamp",
+      "title": "结束时间",
+      "description": "活动结束时间"
+    },
+    "sort": {
+      "bsonType": "int",
+      "title": "排序",
+      "description": "数字越小越靠前",
+      "defaultValue": 0
+    },
+    "status": {
+      "bsonType": "int",
+      "title": "状态",
+      "description": "0-禁用 1-启用",
+      "defaultValue": 1,
+      "enum": [
+        {
+          "value": 0,
+          "text": "禁用"
+        },
+        {
+          "value": 1,
+          "text": "启用"
+        }
+      ]
+    },
+    "createTime": {
+      "bsonType": "timestamp",
+      "description": "创建时间",
+      "forceDefaultValue": {
+        "$env": "now"
+      }
+    },
+    "updateTime": {
+      "bsonType": "timestamp",
+      "description": "更新时间",
+      "forceDefaultValue": {
+        "$env": "now"
+      }
+    }
+  }
+}

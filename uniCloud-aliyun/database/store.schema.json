@@ -1,0 +1,60 @@
+{
+	"bsonType": "object",
+	"required": ["name", "city"],
+	"permission": {
+		"read": true,
+		"create": false,
+		"update": false,
+		"delete": false
+	},
+	"properties": {
+		"_id": {
+			"description": "存储文档 ID（主键）",
+			"bsonType": "string"
+		},
+		"name": {
+			"description": "门店名称",
+			"bsonType": "string"
+		},
+		"logo": {
+			"description": "门店Logo图片",
+			"bsonType": "string"
+		},
+		"address": {
+			"description": "详细地址",
+			"bsonType": "string"
+		},
+		"city": {
+			"description": "城市",
+			"bsonType": "string"
+		},
+		"location": {
+			"description": "地理位置(Point)",
+			"bsonType": "object"
+		},
+		"rating": {
+			"description": "评分",
+			"bsonType": "double"
+		},
+		"recentSales": {
+			"description": "近期销量",
+			"bsonType": "double"
+		},
+		"tags": {
+			"description": "门店标签",
+			"bsonType": "array",
+			"items": {
+				"bsonType": "string"
+			}
+		},
+		"create_date": {
+			"description": "创建时间",
+			"bsonType": "timestamp"
+		}
+	},
+	"indexes": [{
+		"key": {
+			"location": "2dsphere"
+		}
+	}]
+}
