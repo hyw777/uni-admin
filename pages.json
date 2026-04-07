@@ -223,6 +223,28 @@
 			]
 		},
 		{
+					"root": "pages/group_buy",
+					"pages": [{
+							"path": "add",
+							"style": {
+								"navigationBarTitleText": "新增"
+							}
+						},
+						{
+							"path": "edit",
+							"style": {
+								"navigationBarTitleText": "编辑"
+							}
+						},
+						{
+							"path": "list",
+							"style": {
+								"navigationBarTitleText": "列表"
+							}
+						}
+					]
+				},
+		{
 			"root": "pages/order",
 			"pages": [{
 					"path": "add",
