@@ -223,7 +223,17 @@
 			]
 		},
 		{
-					"root": "pages/group_buy",
+			"root": "pages/after_sale",
+			"pages": [{
+					"path": "list",
+					"style": {
+						"navigationBarTitleText": "售后列表"
+					}
+				}
+			]
+		},
+		{
+			"root": "pages/group_buy",
 					"pages": [{
 							"path": "add",
 							"style": {
