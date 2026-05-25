@@ -1,6 +1,17 @@
 {
-  "passwordSecret": "passwordSecret-demo",
-  "tokenSecret": "tokenSecret-demo",
+  "passwordSecret": [
+    {
+      "type": "hmac-sha1",
+      "version": 0,
+      "value": "passwordSecret-demo"
+    },
+    {
+      "type": "hmac-sha256",
+      "version": 1,
+      "value": "passwordSecret-demo"
+    }
+  ],
+  "tokenSecret": "uni-id-token-secret-7f3a9b2c8e1d4f6a5c0b9e8d7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d0e9f8",
   "tokenExpiresIn": 7200,
   "tokenExpiresThreshold": 3600,
   "passwordErrorLimit": 6,
@@ -57,21 +68,18 @@
   },
   "service": {
     "sms": {
-      "name": "应用名称，对应短信模版的name",
+      "name": "美序甄选",
       "codeExpiresIn": 300,
-      "smsKey": "短信密钥key，开通短信服务处可以看到",
-      "smsSecret": "短信密钥secret，开通短信服务处可以看到",
-			"scene": {
-				"bind-mobile-by-sms": { 
-					"templateId": "绑定手机号使用的短信验证码模板", 
-					"codeExpiresIn": 240 
-				}
-			}
-    },
-    "univerify": {
-      "appid": "当前应用的appid，使用云函数URL化，此项必须配置",
-      "apiKey": "apiKey 和 apiSecret 在开发者中心获取，开发者中心：https://dev.dcloud.net.cn/uniLogin/index?type=0，文档：https://ask.dcloud.net.cn/article/37965",
-      "apiSecret": ""
+      "scene": {
+        "login-by-sms": {
+          "templateId": "38313",
+          "codeExpiresIn": 240
+        },
+        "retrieve-by-sms": {
+          "templateId": "38313",
+          "codeExpiresIn": 240
+        }
+      }
     }
   }
 }

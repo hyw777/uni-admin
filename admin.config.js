@@ -77,6 +77,27 @@ export default {
 				text: 'uni-admin 插件',
 				value: 'https://ext.dcloud.net.cn/?cat1=7&cat2=74'
 			}]
+		}, {
+			menu_id: "order-center",
+			text: '订单与数据',
+			icon: 'admin-icons-form',
+			url: "",
+			children: [{
+				menu_id: "order-dashboard",
+				text: '数据看板',
+				icon: 'admin-icons-chart',
+				value: '/pages/order/dashboard/index',
+			}, {
+				menu_id: "redemption-list",
+				text: '核销码管理',
+				icon: 'admin-icons-auth',
+				value: '/pages/redemption/list',
+			}, {
+				menu_id: "redemption-stat",
+				text: '核销统计',
+				icon: 'admin-icons-chart',
+				value: '/pages/redemption/statistics',
+			}]
 		}]
 	},
 	uniStat: {

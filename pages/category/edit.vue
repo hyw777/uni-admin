@@ -194,12 +194,7 @@
           const data = res.result.data[0]
           if (data) {
             this.formData = data
-            if (this.formData.icon) {
-              this.imageValue = {
-                url: this.formData.icon,
-                name: '分类图标'
-              }
-            }
+
           }
         }).catch((err) => {
           uni.showModal({

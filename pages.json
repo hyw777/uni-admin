@@ -273,6 +273,28 @@
 					"style": {
 						"navigationBarTitleText": "列表"
 					}
+				},
+				{
+					"path": "dashboard/index",
+					"style": {
+						"navigationBarTitleText": "数据看板"
+					}
+				}
+			]
+		},
+		{
+			"root": "pages/redemption",
+			"pages": [{
+					"path": "list",
+					"style": {
+						"navigationBarTitleText": "核销码管理"
+					}
+				},
+				{
+					"path": "statistics",
+					"style": {
+						"navigationBarTitleText": "核销统计"
+					}
 				}
 			]
 		},

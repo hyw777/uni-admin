@@ -28,7 +28,7 @@
     <unicloud-db
       ref="udb"
       collection="after_sale_record"
-      field="_id,order_id,goods_id,sku_id,refund_type,reason,description,images,refund_amount,status,return_logistics_company,return_logistics_no,reject_reason,goods_snapshot,refund_time,refund_result,create_time,update_time"
+      field="_id,order_id,goods_id,sku_id,refund_type,reason,description,images,refund_amount,status,return_logistics_company,return_logistics_no,reject_reason,goods_snapshot,uid,refund_time,refund_result,create_time,update_time"
       :where="queryWhere"
       orderby="create_time desc"
       page-data="replace"
@@ -123,6 +123,10 @@
           <view class="as-detail-row">
             <text class="as-dt-label">订单编号</text>
             <text class="as-dt-value">{{ currentDetail.order_id }}</text>
+          </view>
+          <view class="as-detail-row" v-if="currentDetail.uid">
+            <text class="as-dt-label">用户ID</text>
+            <text class="as-dt-value as-dt-uid">{{ currentDetail.uid }}</text>
           </view>
           <view class="as-detail-row">
             <text class="as-dt-label">售后类型</text>

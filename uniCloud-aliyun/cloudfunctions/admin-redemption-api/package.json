@@ -1,0 +1,10 @@
+{
+  "name": "admin-redemption-api",
+  "version": "1.0.0",
+  "description": "管理员核销码管理及订单数据统计API",
+  "main": "index.js",
+  "dependencies": {
+    "uni-id-common": "file:../common/uni-id-common",
+    "uni-config-center": "file:../common/uni-config-center"
+  }
+}

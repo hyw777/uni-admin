@@ -1,0 +1,6 @@
+{
+	"name": "uni-id-common",
+	"version": "1.0.18",
+	"description": "uni-id token生成、校验、刷新",
+	"main": "index.js"
+}
