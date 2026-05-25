@@ -116,7 +116,7 @@
       </view>
       <view class="detail-row">
         <text class="detail-label">快递公司</text>
-        <text class="detail-value">{{ formData.logistics_company || '-' }}</text>
+        <text class="detail-value">{{ logisticsCompanyName(formData.logistics_company) }}</text>
       </view>
       <view class="detail-row">
         <text class="detail-label">快递单号</text>
@@ -172,17 +172,20 @@ export default {
         { text: '同城车队', value: 4 }
       ],
       logisticsCompanyOptions: [
-        { text: '顺丰速运', value: '顺丰速运' },
-        { text: '圆通速递', value: '圆通速递' },
-        { text: '中通快递', value: '中通快递' },
-        { text: '韵达快递', value: '韵达快递' },
-        { text: '申通快递', value: '申通快递' },
-        { text: '极兔速递', value: '极兔速递' },
-        { text: '京东物流', value: '京东物流' },
-        { text: '德邦快递', value: '德邦快递' },
-        { text: '邮政EMS', value: '邮政EMS' },
-        { text: '邮政小包', value: '邮政小包' },
-        { text: '其他', value: '其他' }
+        { text: '顺丰速运', value: 'shunfeng' },
+        { text: '圆通速递', value: 'yuantong' },
+        { text: '中通快递', value: 'zhongtong' },
+        { text: '韵达快递', value: 'yunda' },
+        { text: '申通快递', value: 'shentong' },
+        { text: '极兔速递', value: 'jtexpress' },
+        { text: '京东物流', value: 'jd' },
+        { text: '邮政EMS', value: 'ems' },
+        { text: '德邦快递', value: 'debangkuaidi' },
+        { text: '中国邮政', value: 'youzhengguonei' },
+        { text: '德邦物流', value: 'debangwuliu' },
+        { text: '跨越速运', value: 'kuayue' },
+        { text: '宅急送', value: 'zhaijisong' },
+        { text: '其他', value: 'other' }
       ]
     }
   },
@@ -259,6 +262,16 @@ export default {
     deliveryMethodText(v) {
       const map = { 1: '快递', 2: '大件物流', 3: '送货入户带安装', 4: '同城车队' }
       return map[v] ?? '-'
+    },
+    logisticsCompanyName(code) {
+      const map = {
+        'shunfeng': '顺丰速运', 'yuantong': '圆通速递', 'zhongtong': '中通快递',
+        'yunda': '韵达快递', 'shentong': '申通快递', 'jtexpress': '极兔速递',
+        'jd': '京东物流', 'ems': '邮政EMS', 'debangkuaidi': '德邦快递',
+        'youzhengguonei': '中国邮政', 'debangwuliu': '德邦物流', 'kuayue': '跨越速运',
+        'zhaijisong': '宅急送', 'other': '其他'
+      }
+      return map[code] || code || '-'
     },
     formatAddress(addr) {
       if (!addr) return '-'

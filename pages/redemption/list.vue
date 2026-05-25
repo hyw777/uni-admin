@@ -67,7 +67,7 @@
               <text class="mobile-text">{{ item.user_mobile || '' }}</text>
             </view>
           </uni-td>
-          <uni-td align="center"><text>{{ item.store_name || '-' }}</text></uni-td>
+          <uni-td align="center"><text>{{ item.store_name || item.store_id || '-' }}</text></uni-td>
           <uni-td align="center">
             <view :class="['status-badge', 'status-' + item.status]">{{ statusText(item.status) }}</view>
           </uni-td>
@@ -82,12 +82,7 @@
             <text v-else>-</text>
           </uni-td>
           <uni-td align="center">
-            <view class="op-btns">
-              <button v-if="item.status === 'valid' || item.status === 'unused'" @click="showInvalidateDialog(item)" class="uni-button" size="mini" type="warn">作废</button>
-              <button v-if="item.status === 'valid' || item.status === 'unused'" @click="showExtendDialog(item)" class="uni-button" size="mini" type="default">延期</button>
-              <button v-if="item.status === 'valid' || item.status === 'unused'" @click="forceVerify(item)" class="uni-button" size="mini" type="primary">强制核销</button>
-              <button @click="showDetail(item)" class="uni-button" size="mini" type="default">详情</button>
-            </view>
+            <button @click="showDetail(item)" class="uni-button" size="mini" type="default">详情</button>
           </uni-td>
         </uni-tr>
       </uni-table>
@@ -142,9 +137,9 @@
             <text class="popup-label">核销时间</text>
             <text class="popup-value">{{ formatDate(detailData.used_time) }}</text>
           </view>
-          <view class="popup-row" v-if="detailData.used_by">
+          <view class="popup-row" v-if="detailData.usedByInfo && detailData.usedByInfo.nickname">
             <text class="popup-label">核销人</text>
-            <text class="popup-value">{{ detailData.usedByInfo && detailData.usedByInfo.nickname ? detailData.usedByInfo.nickname : '-' }}</text>
+            <text class="popup-value">{{ detailData.usedByInfo.nickname || '-' }}</text>
           </view>
           <view class="popup-row" v-if="detailData.valid_end_time">
             <text class="popup-label">有效期至</text>

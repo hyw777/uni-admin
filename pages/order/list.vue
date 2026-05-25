@@ -94,15 +94,16 @@
             <uni-td align="center">
               <text>{{ deliveryMethodText(item.delivery_method) }}</text>
             </uni-td>
-            <uni-td align="center">{{ item.logistics_company || '-' }}</uni-td>
+            <uni-td align="center">{{ logisticsCompanyName(item.logistics_company) }}</uni-td>
             <uni-td align="center">
               <text v-if="item.logistics_no" class="logistics-no">{{ item.logistics_no }}</text>
               <text v-else>-</text>
             </uni-td>
             <uni-td align="center">
               <view class="op-group">
-                <button v-if="item.status === 1" @click="openShipDialog(item)" class="uni-button" size="mini" type="primary">发货</button>
-                <text v-else class="op-text">{{ statusText(item.status) }}</text>
+                <!-- 普通订单待发货状态显示发货按钮，团购订单（到店核销）不显示 -->
+                <button v-if="item.status === 1 && item.order_type !== 'group_offline'" @click="openShipDialog(item)" class="uni-button" size="mini" type="primary">发货</button>
+                <text v-else class="op-text">{{ statusText(item) }}</text>
                 <button v-if="item.status === -1 || item.status === 1" @click="confirmDelete(item._id)" class="uni-button" size="mini" type="warn">删除</button>
               </view>
             </uni-td>
@@ -272,16 +273,26 @@ export default {
         logistics_no: ''
       },
       logisticsCompanyOptions: [
-        { text: '顺丰速运', value: '顺丰速运' },
-        { text: '圆通速递', value: '圆通速递' },
-        { text: '中通快递', value: '中通快递' },
-        { text: '韵达快递', value: '韵达快递' },
-        { text: '申通快递', value: '申通快递' },
-        { text: '极兔速递', value: '极兔速递' },
-        { text: '京东物流', value: '京东物流' },
-        { text: '德邦快递', value: '德邦快递' },
-        { text: '邮政EMS', value: '邮政EMS' },
-        { text: '其他', value: '其他' }
+        { text: '顺丰速运', value: 'shunfeng' },
+        { text: '圆通速递', value: 'yuantong' },
+        { text: '中通快递', value: 'zhongtong' },
+        { text: '韵达快递', value: 'yunda' },
+        { text: '申通快递', value: 'shentong' },
+        { text: '极兔速递', value: 'jtexpress' },
+        { text: '京东物流', value: 'jd' },
+        { text: '邮政EMS', value: 'ems' },
+        { text: '德邦快递', value: 'debangkuaidi' },
+        { text: '中国邮政', value: 'youzhengguonei' },
+        { text: '德邦物流', value: 'debangwuliu' },
+        { text: '跨越速运', value: 'kuayue' },
+        { text: '安能物流', value: 'annengwuliu' },
+        { text: '百世快运', value: 'baishiwuliu' },
+        { text: '宅急送', value: 'zhaijisong' },
+        { text: '苏宁物流', value: 'suning' },
+        { text: 'UPS', value: 'ups' },
+        { text: 'DHL', value: 'dhl' },
+        { text: 'FedEx', value: 'fedex' },
+        { text: '其他', value: 'other' }
       ],
       deliveryMethodOptions: [
         { text: '快递', value: 1 },
@@ -390,13 +401,32 @@ export default {
     },
 
     // ── 文本映射 ──────────────────────────────────
-    statusText(status) {
-      const map = { 0: '待支付', 1: '待发货', 2: '已发货', 3: '已完成', '-1': '已取消' }
-      return map[status] ?? status
+    statusText(item) {
+      const status = typeof item === 'object' ? item.status : item
+      const orderType = typeof item === 'object' ? item.order_type : ''
+      const statusMap = { 0: '待支付', 1: '待发货', 2: '已发货', 3: '已完成', '-1': '已取消' }
+      // 团购订单（到店核销）特殊状态
+      if (orderType === 'group_offline') {
+        const groupStatusMap = { 0: '待支付', 1: '待使用', 2: '待使用', 3: '已完成', '-1': '已取消' }
+        return groupStatusMap[status] ?? status
+      }
+      return statusMap[status] ?? status
     },
     deliveryMethodText(v) {
       const map = { 1: '快递', 2: '大件物流', 3: '送货入户带安装', 4: '同城车队' }
       return map[v] ?? '-'
+    },
+    logisticsCompanyName(code) {
+      const map = {
+        'shunfeng': '顺丰速运', 'yuantong': '圆通速递', 'zhongtong': '中通快递',
+        'yunda': '韵达快递', 'shentong': '申通快递', 'jtexpress': '极兔速递',
+        'jd': '京东物流', 'ems': '邮政EMS', 'debangkuaidi': '德邦快递',
+        'youzhengguonei': '中国邮政', 'debangwuliu': '德邦物流', 'kuayue': '跨越速运',
+        'annengwuliu': '安能物流', 'baishiwuliu': '百世快运', 'zhaijisong': '宅急送',
+        'suning': '苏宁物流', 'ups': 'UPS', 'dhl': 'DHL', 'fedex': 'FedEx',
+        'other': '其他'
+      }
+      return map[code] || code || '-'
     },
     formatAddress(addr) {
       if (!addr) return '-'
@@ -529,7 +559,7 @@ export default {
         db.collection('order').doc(id).update({
           status: 2,
           logistics_no: this.batchOrdersMap[id],
-          logistics_company: '顺丰速运',
+          logistics_company: 'shunfeng',
           delivery_method: 1
         }).catch(() => null)
       )

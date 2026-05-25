@@ -53,7 +53,7 @@
         <uni-datetime-picker return-type="timestamp" v-model="formData.create_date"></uni-datetime-picker>
       </uni-forms-item>
       <view class="uni-button-group">
-        <button type="primary" class="uni-button" style="width: 100px;" @click="submit">提交</button>
+        <button type="primary" class="uni-button" style="width: 100px;" @click="submit" :disabled="submitting">提交</button>
         <navigator open-type="navigateBack" style="margin-left: 15px;">
           <button class="uni-button" style="width: 100px;">返回</button>
         </navigator>
@@ -103,6 +103,7 @@
         imageValue: null,
         imagesValue: [],
         specsList: [],
+        submitting: false,
         rules: {
           ...getValidator(Object.keys(formData))
         }
@@ -112,50 +113,56 @@
       this.$refs.form.setRules(this.rules)
     },
     methods: {
-      
-addSpec() {
+      addSpec() {
         this.specsList.push({ label: '', value: '' })
       },
       removeSpec(index) {
         this.specsList.splice(index, 1)
       },
-      /**
-       * 验证表单并提交
-       */
-      submit() {
-        uni.showLoading({
-          mask: true
-        })
+      async submit() {
+        if (this.submitting) return;
         
-        this.formData.image = this.imageValue ? this.imageValue.url : ''
-        this.formData.images = this.imagesValue && this.imagesValue.length ? this.imagesValue.map(i => i.url) : []
-        this.formData.specs = this.specsList.filter(item => item.label && item.value).map(item => ({ label: item.label, value: item.value }))
+        uni.showLoading({ mask: true });
+        this.submitting = true;
+        
+        try {
+          // 处理封面图 - 确保获取 cloud:// 开头的 fileID
+          if (this.imageValue) {
+            this.formData.image = this.imageValue.fileID || this.imageValue.url || '';
+          } else {
+            this.formData.image = '';
+          }
+          
+          // 处理轮播图
+          if (this.imagesValue && this.imagesValue.length) {
+            this.formData.images = this.imagesValue.map(item => item.fileID || item.url);
+          } else {
+            this.formData.images = [];
+          }
+          
+          this.formData.specs = this.specsList.filter(item => item.label && item.value).map(item => ({ label: item.label, value: item.value }));
 
-        this.$refs.form.validate().then((res) => {
-          return this.submitForm(res)
-        }).catch(() => {
-        }).finally(() => {
-          uni.hideLoading()
-        })
+          const res = await this.$refs.form.validate();
+          await this.submitForm(res);
+        } catch (err) {
+          console.error('Submit error:', err);
+        } finally {
+          this.submitting = false;
+          uni.hideLoading();
+        }
       },
 
-      /**
-       * 提交表单
-       */
       submitForm(value) {
-        // 使用 clientDB 提交数据
         return db.collection(dbCollectionName).add(value).then((res) => {
-          uni.showToast({
-            title: '新增成功'
-          })
-          this.getOpenerEventChannel().emit('refreshData')
-          setTimeout(() => uni.navigateBack(), 500)
+          uni.showToast({ title: '新增成功' });
+          this.getOpenerEventChannel().emit('refreshData');
+          setTimeout(() => uni.navigateBack(), 500);
         }).catch((err) => {
           uni.showModal({
             content: err.message || '请求服务失败',
             showCancel: false
-          })
-        })
+          });
+        });
       }
     }
   }

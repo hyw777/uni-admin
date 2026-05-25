@@ -26,9 +26,16 @@ exports.main = async (event, context) => {
     case 'list': {
       const { status, store_id, keyword, page = 1, pageSize = 20, orderBy = 'create_date desc' } = params || {};
 
+      console.log('list - 开始查询, status:', status, 'keyword:', keyword);
+
       let where = {};
       if (status && status !== 'all') {
-        where.status = status;
+        // 兼容：待核销状态包括 unused 和 valid
+        if (status === 'valid') {
+          where.status = dbCmd.in(['unused', 'valid']);
+        } else {
+          where.status = status;
+        }
       }
       if (store_id) {
         where.store_id = store_id;
@@ -37,6 +44,10 @@ exports.main = async (event, context) => {
         const re = new RegExp(keyword, 'i');
         where.code = re;
       }
+
+      // 先查几条原始数据看看
+      const rawData = await db.collection('redemption_code').limit(3).get();
+      console.log('list - 原始核销码数据:', JSON.stringify(rawData).substring(0, 500));
 
       const skip = (page - 1) * pageSize;
       const [dataResult, countResult] = await Promise.all([
@@ -49,8 +60,12 @@ exports.main = async (event, context) => {
         db.collection('redemption_code').where(where).count()
       ]);
 
-      const records = (dataResult.result && dataResult.result.data) ? dataResult.result.data : [];
-      const total = (countResult.result && typeof countResult.result.total === 'number') ? countResult.result.total : 0;
+      // 兼容不同返回格式：可能是 result.data 或 data
+      const records = dataResult.data || (dataResult.result && dataResult.result.data) || [];
+      const getCount = (res) => res?.total ?? res?.result?.total ?? 0;
+      const total = getCount(countResult);
+
+      console.log('list - 查询到记录数:', records.length, 'total:', total, 'dataResult:', JSON.stringify(dataResult).substring(0, 200));
 
       const orderIds = records.map(r => r.order_id).filter(Boolean);
       const orderMap = {};
@@ -59,7 +74,7 @@ exports.main = async (event, context) => {
           .where({ _id: dbCmd.in(orderIds) })
           .field({ _id: true, user_id: true, total_fee: true, items: true, order_type: true, order_no: true })
           .get();
-        const orders = (orderRes.result && orderRes.result.data) ? orderRes.result.data : [];
+        const orders = orderRes.data || (orderRes.result && orderRes.result.data) || [];
         orders.forEach(o => { orderMap[o._id] = o; });
       }
 
@@ -70,7 +85,7 @@ exports.main = async (event, context) => {
           .where({ _id: dbCmd.in(userIds) })
           .field({ _id: true, nickname: true, mobile: true })
           .get();
-        const users = (userRes.result && userRes.result.data) ? userRes.result.data : [];
+        const users = userRes.data || (userRes.result && userRes.result.data) || [];
         users.forEach(u => { userMap[u._id] = u; });
       }
 
@@ -81,14 +96,26 @@ exports.main = async (event, context) => {
           .where({ _id: dbCmd.in(usedByIds) })
           .field({ _id: true, nickname: true })
           .get();
-        const usedByUsers = (usedByRes.result && usedByRes.result.data) ? usedByRes.result.data : [];
+        const usedByUsers = usedByRes.data || (usedByRes.result && usedByRes.result.data) || [];
         usedByUsers.forEach(u => { usedByMap[u._id] = u; });
+      }
+
+      const storeIds = [...new Set(records.map(r => r.store_id).filter(Boolean))];
+      const storeMap = {};
+      if (storeIds.length) {
+        const storeRes = await db.collection('store')
+          .where({ _id: dbCmd.in(storeIds) })
+          .field({ _id: true, name: true })
+          .get();
+        const stores = storeRes.data || (storeRes.result && storeRes.result.data) || [];
+        stores.forEach(s => { storeMap[s._id] = s; });
       }
 
       const enriched = records.map(r => {
         const order = orderMap[r.order_id] || {};
         const user = userMap[order.user_id] || {};
         const usedByUser = usedByMap[r.used_by] || {};
+        const store = storeMap[r.store_id] || {};
         return {
           ...r,
           order_no: order.order_no || '',
@@ -97,7 +124,8 @@ exports.main = async (event, context) => {
           goods_title: order.items?.[0]?.title || '',
           user_nickname: user.nickname || '未知用户',
           user_mobile: user.mobile || '',
-          used_by_nickname: usedByUser.nickname || '—'
+          used_by_nickname: usedByUser.nickname || '—',
+          store_name: store.name || r.store_id || ''
         };
       });
 
@@ -117,7 +145,7 @@ exports.main = async (event, context) => {
       if (!id) return { errCode: 1, errMsg: '缺少核销码ID' };
 
       const detailRes = await db.collection('redemption_code').doc(id).get();
-      const data = (detailRes.result && detailRes.result.data) ? detailRes.result.data : [];
+      const data = detailRes.data || (detailRes.result && detailRes.result.data) || [];
       if (!data || data.length === 0) return { errCode: 2, errMsg: '核销码不存在' };
 
       const record = data[0];
@@ -128,7 +156,7 @@ exports.main = async (event, context) => {
           .where({ _id: record.order_id })
           .field({ _id: true, order_no: true, user_id: true, total_fee: true, items: true, order_type: true, status: true, address: true, create_date: true })
           .get();
-        const orders = (orderRes.result && orderRes.result.data) ? orderRes.result.data : [];
+        const orders = orderRes.data || (orderRes.result && orderRes.result.data) || [];
         if (orders.length > 0) orderInfo = orders[0];
       }
 
@@ -138,7 +166,7 @@ exports.main = async (event, context) => {
           .doc(orderInfo.user_id)
           .field({ nickname: true, mobile: true })
           .get();
-        const users = (userRes.result && userRes.result.data) ? userRes.result.data : [];
+        const users = userRes.data || (userRes.result && userRes.result.data) || [];
         if (users.length > 0) userInfo = users[0];
       }
 
@@ -148,7 +176,7 @@ exports.main = async (event, context) => {
           .doc(record.used_by)
           .field({ nickname: true, mobile: true })
           .get();
-        const users = (usedByRes.result && usedByRes.data) ? usedByRes.result.data : [];
+        const users = usedByRes.data || (usedByRes.result && usedByRes.result.data) || [];
         if (users.length > 0) usedByInfo = users[0];
       }
 
@@ -158,7 +186,7 @@ exports.main = async (event, context) => {
           .doc(record.store_id)
           .field({ name: true, address: true, mobile: true })
           .get();
-        const stores = (storeRes.result && storeRes.result.data) ? storeRes.result.data : [];
+        const stores = storeRes.data || (storeRes.result && storeRes.result.data) || [];
         if (stores.length > 0) storeInfo = stores[0];
       }
 
@@ -179,7 +207,7 @@ exports.main = async (event, context) => {
       if (!id) return { errCode: 1, errMsg: '缺少核销码ID' };
 
       const invRes = await db.collection('redemption_code').doc(id).get();
-      const invData = (invRes.result && invRes.result.data) ? invRes.result.data : [];
+      const invData = invRes.data || (invRes.result && invRes.result.data) || [];
       if (!invData || invData.length === 0) return { errCode: 2, errMsg: '核销码不存在' };
 
       const record = invData[0];
@@ -201,7 +229,7 @@ exports.main = async (event, context) => {
       if (!id) return { errCode: 1, errMsg: '缺少核销码ID' };
 
       const fvRes = await db.collection('redemption_code').doc(id).get();
-      const fvData = (fvRes.result && fvRes.result.data) ? fvRes.result.data : [];
+      const fvData = fvRes.data || (fvRes.result && fvRes.result.data) || [];
       if (!fvData || fvData.length === 0) return { errCode: 2, errMsg: '核销码不存在' };
 
       const record = fvData[0];
@@ -232,7 +260,7 @@ exports.main = async (event, context) => {
       if (!days || days < 1) return { errCode: 2, errMsg: '天数必须大于0' };
 
       const extRes = await db.collection('redemption_code').doc(id).get();
-      const extData = (extRes.result && extRes.result.data) ? extRes.result.data : [];
+      const extData = extRes.data || (extRes.result && extRes.result.data) || [];
       if (!extData || extData.length === 0) return { errCode: 3, errMsg: '核销码不存在' };
 
       const record = extData[0];
@@ -251,6 +279,8 @@ exports.main = async (event, context) => {
     case 'statistics': {
       const { store_id } = params || {};
 
+      console.log('statistics - 开始统计, store_id:', store_id);
+
       const todayStart = new Date().setHours(0, 0, 0, 0);
       const weekStart = todayStart - 6 * 24 * 60 * 60 * 1000;
       const monthStartObj = new Date();
@@ -261,12 +291,22 @@ exports.main = async (event, context) => {
       let whereBase = {};
       if (store_id) whereBase.store_id = store_id;
 
+      // 查询每个状态的记录数 - count() 返回 {total: N}
       const [totalCount, usedCount, unusedCount, validCount] = await Promise.all([
         db.collection('redemption_code').where(whereBase).count(),
         db.collection('redemption_code').where({ ...whereBase, status: 'used' }).count(),
         db.collection('redemption_code').where({ ...whereBase, status: 'unused' }).count(),
         db.collection('redemption_code').where({ ...whereBase, status: 'valid' }).count()
       ]);
+
+      // 提取 total，兼容不同返回格式
+      const statTotal = (res) => res?.total ?? res?.result?.total ?? 0;
+      const total = statTotal(totalCount);
+      const used = statTotal(usedCount);
+      const unused = statTotal(unusedCount);
+      const valid = statTotal(validCount);
+
+      console.log('statistics - 统计结果:', { total, used, unused, valid });
 
       const [todayUsed, weekUsed, monthUsed] = await Promise.all([
         db.collection('redemption_code').where({ ...whereBase, status: 'used', used_time: dbCmd.gte(todayStart) }).count(),
@@ -296,7 +336,7 @@ exports.main = async (event, context) => {
           .count();
         trendData.push({
           date: new Date(dayStart).toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' }),
-          count: (dayRes.result && typeof dayRes.result.total === 'number') ? dayRes.result.total : 0
+          count: dayRes?.total ?? dayRes?.result?.total ?? 0
         });
       }
 
@@ -311,7 +351,7 @@ exports.main = async (event, context) => {
           .where({ _id: dbCmd.in(storeIds) })
           .field({ _id: true, name: true })
           .get();
-        const stores = (storeRes.result && storeRes.result.data) ? storeRes.result.data : [];
+        const stores = storeRes.data || (storeRes.result && storeRes.result.data) || [];
         stores.forEach(s => { storeNameMap[s._id] = s.name; });
       }
 
@@ -330,22 +370,22 @@ exports.main = async (event, context) => {
         rate: storeTotalMap[s.store_id] ? ((s.used_count / storeTotalMap[s.store_id]) * 100).toFixed(1) : '0.0'
       }));
 
-      const getTotal = (res) => (res.result && typeof res.result.total === 'number') ? res.result.total : 0;
+      const statTotal2 = (res) => res?.total ?? res?.result?.total ?? 0;
 
       return {
         errCode: 0,
         data: {
           overview: {
-            total: getTotal(totalCount),
-            used: getTotal(usedCount),
-            unused: getTotal(unusedCount),
-            valid: getTotal(validCount),
-            used_rate: getTotal(totalCount) ? ((getTotal(usedCount) / getTotal(totalCount)) * 100).toFixed(1) : '0.0'
+            total: statTotal2(totalCount),
+            used: statTotal2(usedCount),
+            unused: statTotal2(unusedCount),
+            valid: statTotal2(validCount),
+            used_rate: statTotal2(totalCount) ? ((statTotal2(usedCount) / statTotal2(totalCount)) * 100).toFixed(1) : '0.0'
           },
           timeline: {
-            today: getTotal(todayUsed),
-            week: getTotal(weekUsed),
-            month: getTotal(monthUsed)
+            today: statTotal2(todayUsed),
+            week: statTotal2(weekUsed),
+            month: statTotal2(monthUsed)
           },
           trend: trendData,
           store_ranking: storeWithRate
@@ -356,6 +396,7 @@ exports.main = async (event, context) => {
     case 'orderStatistics': {
       const { start_date, end_date } = params || {};
 
+      console.log('orderStatistics - 开始统计, start_date:', start_date, 'end_date:', end_date);
       const now = Date.now();
       const defaultStartObj = new Date();
       defaultStartObj.setDate(1);
@@ -365,51 +406,187 @@ exports.main = async (event, context) => {
       const startTs = start_date ? new Date(start_date).getTime() : defaultStart;
       const endTs = end_date ? new Date(end_date).getTime() : now;
 
+      console.log('orderStatistics - 时间戳范围:', { startTs, endTs, now, defaultStartObj: defaultStartObj.toISOString() });
+
+      // 先查询几条订单看看数据结构
+      const sampleOrders = await db.collection('order').limit(3).get();
+      console.log('orderStatistics - 订单示例:', JSON.stringify(sampleOrders).substring(0, 800));
+
+      // 统计所有订单（包括普通订单和团购订单）
       const [totalOrders, paidOrders] = await Promise.all([
         db.collection('order').where({ create_date: dbCmd.gte(startTs).and(dbCmd.lte(endTs)) }).count(),
         db.collection('order').where({ status: dbCmd.in([1, 2, 3]), create_date: dbCmd.gte(startTs).and(dbCmd.lte(endTs)) }).count()
       ]);
 
-      const [totalAmountRes, paidAmountRes] = await Promise.all([
-        db.collection('order').aggregate()
-          .match({ create_date: { $gte: startTs, $lte: endTs } })
-          .group({ _id: '$status', total_fee_sum: { $sum: '$total_fee' } })
-          .end(),
-        db.collection('order').aggregate()
-          .match({ status: { $in: [1, 2, 3] }, create_date: { $gte: startTs, $lte: endTs } })
-          .group({ _id: '$status', total_fee_sum: { $sum: '$total_fee' } })
-          .end()
-      ]);
+      // 兼容 count() 返回格式
+      const getCount = (res) => res?.total ?? res?.result?.total ?? 0;
+      const total = getCount(totalOrders);
+      const paid = getCount(paidOrders);
 
+      console.log('orderStatistics - 订单统计, total:', total, 'paid:', paid);
+
+      // 额外查询全部订单数量（不受时间限制）用于对比
+      const allOrdersCount = await db.collection('order').count();
+      console.log('orderStatistics - 全部订单总数:', getCount(allOrdersCount));
+
+      // 额外查询核销码状态
+      const redemptionCounts = await Promise.all([
+        db.collection('redemption_code').count(),
+        db.collection('redemption_code').where({ status: 'used' }).count(),
+        db.collection('redemption_code').where({ status: dbCmd.in(['unused', 'valid']) }).count()
+      ]);
+      console.log('orderStatistics - 核销码: 总数', getCount(redemptionCounts[0]), '已用', getCount(redemptionCounts[1]), '待用', getCount(redemptionCounts[2]));
+
+      // 统计订单金额
+      const paidAmountRes = await db.collection('order')
+        .aggregate()
+        .match({ status: { $in: [1, 2, 3] }, create_date: { $gte: startTs, $lte: endTs } })
+        .group({ _id: null, total_fee_sum: { $sum: '$total_fee' }, count: { $sum: 1 } })
+        .end();
+      const paidAmountData = (paidAmountRes && paidAmountRes.data) || [];
+      const paidAmount = paidAmountData[0]?.total_fee_sum || 0;
+
+      // 统计订单类型分布
+      const typeAgg = await db.collection('order')
+        .aggregate()
+        .match({ create_date: { $gte: startTs, $lte: endTs } })
+        .group({ _id: '$order_type', count: { $sum: 1 }, amount: { $sum: '$total_fee' } })
+        .end();
+      const typeDist = ((typeAgg && typeAgg.data) || []).map(r => ({
+        name: r._id === 'group_offline' ? '到店核销' : (r._id === 'normal' ? '普通订单' : (r._id || '其他')),
+        count: r.count,
+        amount: r.amount
+      }));
+
+      // 统计配送方式（仅普通订单）
+      const deliveryAgg = await db.collection('order')
+        .aggregate()
+        .match({ order_type: 'normal', create_date: { $gte: startTs, $lte: endTs } })
+        .group({ _id: '$delivery_method', count: { $sum: 1 } })
+        .end();
+      const deliveryDist = ((deliveryAgg && deliveryAgg.data) || []).map(r => ({
+        name: { 1: '快递', 2: '大件物流', 3: '送货入户带安装', 4: '同城车队' }[r._id] || '其他',
+        count: r.count
+      }));
+
+      // 省份和城市统计
+      // 普通订单从订单的收货地址获取，线下团购从门店获取
       const provinceMap = {};
       const cityMap = {};
 
-      const addrRes = await db.collection('order')
-        .where({ status: dbCmd.in([1, 2, 3]), order_type: 'normal', create_date: dbCmd.gte(startTs).and(dbCmd.lte(endTs)) })
-        .field({ _id: true, total_fee: true, status: true, address: true, create_date: true })
+      // 查询所有已支付订单
+      const allOrders = await db.collection('order')
+        .where({ status: dbCmd.in([1, 2, 3]), create_date: dbCmd.gte(startTs).and(dbCmd.lte(endTs)) })
+        .field({ _id: true, total_fee: true, order_type: true, address: true, store_id: true })
         .limit(1000)
         .get();
-      const addressOrders = (addrRes.result && addrRes.result.data) ? addrRes.result.data : [];
+      const allOrdersData = allOrders.data || (allOrders.result && allOrders.result.data) || [];
+      console.log('orderStatistics - 已支付订单总数:', allOrdersData.length);
 
-      let totalAmount = 0;
-      let paidAmount = 0;
+      if (allOrdersData.length > 0) {
+        // 打印第一个订单看看结构
+        console.log('orderStatistics - 订单地址示例:', JSON.stringify(allOrdersData[0]).substring(0, 500));
+      }
 
-      ((totalAmountRes && totalAmountRes.data) || []).forEach(r => { totalAmount += r.total_fee_sum || 0; });
-      ((paidAmountRes && paidAmountRes.data) || []).forEach(r => { paidAmount += r.total_fee_sum || 0; });
+      // 查询所有门店信息备用
+      const storeIds = [...new Set(allOrdersData.map(o => o.store_id).filter(Boolean))];
+      const storeMap = {};
+      if (storeIds.length) {
+        const storeRes = await db.collection('store')
+          .where({ _id: dbCmd.in(storeIds) })
+          .field({ _id: true, name: true, province: true, city: true, address: true })
+          .get();
+        const stores = storeRes.data || (storeRes.result && storeRes.result.data) || [];
+        stores.forEach(s => { storeMap[s._id] = s; });
+      }
+      console.log('orderStatistics - 门店信息:', JSON.stringify(storeMap));
 
-      addressOrders.forEach(order => {
+      // 处理所有订单
+      allOrdersData.forEach(order => {
         const fee = order.total_fee || 0;
-        const province = order.address?.province || order.address?.province_name || '未知省份';
-        const city = order.address?.city || order.address?.city_name || '未知城市';
+        let province = '';
+        let city = '';
 
-        if (!provinceMap[province]) provinceMap[province] = { count: 0, amount: 0 };
-        provinceMap[province].count += 1;
-        provinceMap[province].amount += fee;
+        if (order.order_type === 'normal') {
+          // 普通订单：从 address 字段获取
+          const addr = order.address || {};
+          const detail = addr.detail || addr.address || '';
 
-        if (!cityMap[city]) cityMap[city] = { count: 0, amount: 0 };
-        cityMap[city].count += 1;
-        cityMap[city].amount += fee;
+          if (detail) {
+            // 从详细地址字符串解析省份和城市
+            // 格式通常是：XX省XX市XX区/县XX路
+            const provMatch = detail.match(/^(.+省|.+自治区|.+特别行政区)/);
+            if (provMatch) {
+              province = provMatch[1];
+            } else {
+              // 直辖市格式：北京、上海、天津、重庆
+              const zxsMatch = detail.match(/^(北京|上海|天津|重庆)/);
+              if (zxsMatch) {
+                province = zxsMatch[1];
+                city = zxsMatch[1]; // 直辖市省份和城市相同
+              }
+            }
+
+            if (!city) {
+              // 匹配市、地区、自治州 - 提取省后面的城市名
+              const cityMatch = detail.match(/(?:省|自治区|特别行政区)(.+?(?:市|地区|自治州))/) || detail.match(/(?:省|自治区)(.+?市)/);
+              if (cityMatch) {
+                city = cityMatch[1];
+              }
+            }
+          }
+
+          // 如果 address 有独立的省份城市字段也尝试获取
+          if (!province) province = addr.province || addr.province_name || '';
+          if (!city) city = addr.city || addr.city_name || '';
+
+          console.log('orderStatistics - 解析地址:', { detail, province, city });
+        } else {
+          // 团购订单：优先用订单中存储的门店信息
+          const store = storeMap[order.store_id] || {};
+          let storeName = store.name || order.redemption_store_name || '';
+          let storeAddr = store.address || order.redemption_store_address || '';
+
+          // 如果有门店地址，从地址解析
+          if (storeAddr) {
+            const provMatch = storeAddr.match(/^(.+省|.+自治区|.+特别行政区)/);
+            if (provMatch) {
+              province = provMatch[1];
+            } else {
+              const zxsMatch = storeAddr.match(/^(北京|上海|天津|重庆)/);
+              if (zxsMatch) {
+                province = zxsMatch[1];
+                city = zxsMatch[1];
+              }
+            }
+            if (!city) {
+              const cityMatch = storeAddr.match(/(?:省|自治区|特别行政区)(.+?(?:市|地区|自治州))/) || storeAddr.match(/(?:省|自治区)(.+?市)/);
+              if (cityMatch) city = cityMatch[1];
+            }
+          }
+
+          // 如果没有，用门店的省份城市字段
+          if (!province) province = store.province || '';
+          if (!city) city = store.city || storeName || '';
+
+          console.log('orderStatistics - 团购订单门店信息:', { storeId: order.store_id, storeName, storeAddr, province, city });
+        }
+
+        if (!province) return;
+        const provKey = province;
+        const cityKey = city || '未知城市';
+
+        if (!provinceMap[provKey]) provinceMap[provKey] = { count: 0, amount: 0 };
+        provinceMap[provKey].count += 1;
+        provinceMap[provKey].amount += fee;
+
+        if (!cityMap[cityKey]) cityMap[cityKey] = { count: 0, amount: 0 };
+        cityMap[cityKey].count += 1;
+        cityMap[cityKey].amount += fee;
       });
+
+      console.log('orderStatistics - 省份统计结果:', JSON.stringify(provinceMap));
+      console.log('orderStatistics - 城市统计结果:', JSON.stringify(cityMap));
 
       const provinceRanking = Object.entries(provinceMap)
         .map(([name, data]) => ({ name, count: data.count, amount: data.amount }))
@@ -421,39 +598,28 @@ exports.main = async (event, context) => {
         .sort((a, b) => b.amount - a.amount)
         .slice(0, 15);
 
-      const [normalOrders, onlineOrders, offlineOrders] = await Promise.all([
-        db.collection('order').where({ order_type: 'normal', status: dbCmd.in([1, 2, 3]), create_date: dbCmd.gte(startTs).and(dbCmd.lte(endTs)) }).count(),
-        db.collection('order').where({ order_type: 'group_online', status: dbCmd.in([1, 2, 3]), create_date: dbCmd.gte(startTs).and(dbCmd.lte(endTs)) }).count(),
-        db.collection('order').where({ order_type: 'group_offline', status: dbCmd.in([1, 2, 3]), create_date: dbCmd.gte(startTs).and(dbCmd.lte(endTs)) }).count()
-      ]);
-
-      const deliveryDistRaw = await db.collection('order')
-        .aggregate()
-        .match({ status: { $in: [1, 2, 3] }, delivery_method: { $exists: true }, create_date: { $gte: startTs, $lte: endTs } })
-        .group({ _id: '$delivery_method', count: { $sum: 1 } })
-        .end();
-
-      const deliveryMap = { 1: '普通快递', 2: '大件物流', 3: '送货入户带安装', 4: '同城车队' };
-      const deliveryDist = ((deliveryDistRaw && deliveryDistRaw.data) || []).map(r => ({
-        name: deliveryMap[r._id] || `方式${r._id}`,
-        count: r.count
-      }));
-
       const dailyTrend = [];
       const daysDiff = Math.ceil((endTs - startTs) / (24 * 60 * 60 * 1000));
       const loopDays = Math.min(daysDiff, 30);
+      console.log('orderStatistics - 日趋势查询，loopDays:', loopDays);
+
       for (let i = loopDays - 1; i >= 0; i--) {
         const dayStart = startTs + i * 24 * 60 * 60 * 1000;
         const dayEnd = dayStart + 24 * 60 * 60 * 1000;
+        console.log('orderStatistics - 查询日期:', new Date(dayStart).toISOString().split('T')[0]);
+
         const dayCountRes = await db.collection('order')
           .where({ status: dbCmd.in([1, 2, 3]), create_date: dbCmd.gte(dayStart).and(dbCmd.lt(dayEnd)) })
           .count();
         const dayAmountRes = await db.collection('order').aggregate()
           .match({ status: { $in: [1, 2, 3] }, create_date: { $gte: dayStart, $lt: dayEnd } })
-          .group({ _id: '$status', total_fee_sum: { $sum: '$total_fee' } })
+          .group({ _id: null, total_fee_sum: { $sum: '$total_fee' } })
           .end();
-        const orderCount = (dayCountRes.result && typeof dayCountRes.result.total === 'number') ? dayCountRes.result.total : 0;
-        const dayAmount = ((dayAmountRes && dayAmountRes.data) || []).reduce((sum, r) => sum + (r.total_fee_sum || 0), 0);
+        const orderCount = dayCountRes?.total ?? dayCountRes?.result?.total ?? 0;
+        const dayAmount = ((dayAmountRes && dayAmountRes.data) || [])[0]?.total_fee_sum || 0;
+
+        console.log('orderStatistics - 日期:', new Date(dayStart).toISOString().split('T')[0], '订单数:', orderCount, '金额:', dayAmount);
+
         dailyTrend.push({
           date: new Date(dayStart).toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' }),
           count: orderCount,
@@ -469,31 +635,25 @@ exports.main = async (event, context) => {
         .count();
       const todayAmountRes = await db.collection('order').aggregate()
         .match({ status: { $in: [1, 2, 3] }, create_date: { $gte: todayStart } })
-        .group({ _id: '$status', total_fee_sum: { $sum: '$total_fee' } })
+        .group({ _id: null, total_fee_sum: { $sum: '$total_fee' } })
         .end();
-      const todayAmount = ((todayAmountRes && todayAmountRes.data) || []).reduce((sum, r) => sum + (r.total_fee_sum || 0), 0);
-
-      const getTotal = (res) => (res.result && typeof res.result.total === 'number') ? res.result.total : 0;
+      const todayAmount = ((todayAmountRes && todayAmountRes.data) || [])[0]?.total_fee_sum || 0;
 
       return {
         errCode: 0,
         data: {
           summary: {
-            total_orders: getTotal(totalOrders),
-            paid_orders: getTotal(paidOrders),
-            total_amount: totalAmount,
+            total_orders: total,
+            paid_orders: paid,
+            total_amount: paidAmount,
             paid_amount: paidAmount,
-            avg_order_value: getTotal(paidOrders) ? Math.round(paidAmount / getTotal(paidOrders)) : 0
+            avg_order_value: paid ? Math.round(paidAmount / paid) : 0
           },
           today: {
-            orders: getTotal(todayOrders),
+            orders: todayOrders?.total ?? todayOrders?.result?.total ?? 0,
             amount: todayAmount
           },
-          type_dist: [
-            { name: '普通商品', count: getTotal(normalOrders) },
-            { name: '线上团购', count: getTotal(onlineOrders) },
-            { name: '线下核销', count: getTotal(offlineOrders) }
-          ],
+          type_dist: typeDist,
           delivery_dist: deliveryDist,
           province_ranking: provinceRanking,
           city_ranking: cityRanking,

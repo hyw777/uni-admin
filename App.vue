@@ -8,7 +8,6 @@
 		version
 	} from './package.json'
 	import { uniAdminCacheKey } from './store/constants.js'
-	import uploadFileForExtStorage from "@/js_sdk/ext-storage/uploadFileForExtStorage.js"
 	export default {
 		created() {
 			this.clear = undefined
@@ -59,19 +58,6 @@
 
 			// theme
 			this.SET_THEME(uni.getStorageSync(uniAdminCacheKey.theme) || 'default')
-
-			// 设置 uniCloud.uploadFile 默认上传的云存储供应商
-			uploadFileForExtStorage.init({
-				provider: "unicloud", // provider代表默认上传到哪，可选项 "unicloud" 内置存储; "extStorage" 扩展存储;
-				domain: "cdn.example.com", //【重要】这里需要改成你开通扩展存储时绑定的自定义域名）
-				fileID2fileURL: true, // 将fileID转成fileURL，方便兼容老项目
-				// 获取上传参数的函数
-				uploadFileOptions: async (event) => {
-					// ext-storage-co 是你自己写的云对象，参考代码：https://doc.dcloud.net.cn/uniCloud/ext-storage/dev.html#getuploadfileoptions
-					const uniCloudStorageExtCo = uniCloud.importObject("ext-storage-co");
-					return await uniCloudStorageExtCo.getUploadFileOptions(event);
-				}
-			});
 		},
 		onShow: function() {
 			console.log('App Show')
@@ -82,7 +68,7 @@
 			this.clear && clearInterval(this.clear)
 		}
 	}
-</script>
+	</script>
 
 <style lang="scss">
 	@import '@/common/uni.css';
