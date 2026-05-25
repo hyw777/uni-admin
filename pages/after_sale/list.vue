@@ -22,6 +22,7 @@
         >{{ s.label }}</view>
       </view>
       <button class="as-btn-migrate" size="mini" :loading="isMigrating" @click="backfillSnapshots">修复商品快照</button>
+      <button class="as-btn-migrate" size="mini" :disabled="!selectedIndexs.length" style="color: #c0392b; border-color: #c0392b; margin-left: 8px;" @click="delTable">批量删除</button>
     </view>
 
     <!-- 数据表格 -->
@@ -34,12 +35,13 @@
       page-data="replace"
       :page-size="pageSize"
       :page-current="pageCurrent"
+      @load="onDataLoad"
       v-slot:default="{data, pagination, loading, error}"
     >
       <view v-if="error" class="as-error">{{ error.message }}</view>
       <view v-else-if="loading" class="as-loading">加载中...</view>
       <template v-else>
-        <uni-table border stripe emptyText="暂无售后记录">
+        <uni-table ref="table" border stripe type="selection" @selection-change="selectionChange" emptyText="暂无售后记录">
           <uni-tr>
             <uni-th align="center" width="160">商品信息</uni-th>
             <uni-th align="center" width="140">订单编号</uni-th>
@@ -202,6 +204,7 @@
 import { ref, reactive, computed, watch } from 'vue'
 
 const udb = ref(null)
+const table = ref(null)
 const detailPopup = ref(null)
 
 const searchKey = ref('')
@@ -209,6 +212,8 @@ const activeTab = ref('all')
 const pageSize = ref(15)
 const pageCurrent = ref(1)
 const currentDetail = ref(null)
+const selectedIndexs = ref([])
+const dataList = ref([])
 
 const statusMap = {
   'pending': '待处理',
@@ -328,6 +333,33 @@ const closeDetail = () => {
 }
 
 // 操作处理
+const onDataLoad = (data) => {
+  dataList.value = data
+}
+
+const selectionChange = (e) => {
+  selectedIndexs.value = e.detail.index
+}
+
+const delTable = () => {
+  if (!selectedIndexs.value.length) {
+    uni.showToast({ title: '请选择要删除的记录', icon: 'none' })
+    return
+  }
+
+  // 获取真实的数据列表（通过 load 事件捕获的数据）
+  const ids = selectedIndexs.value.map(i => dataList.value[i]._id)
+  
+  udb.value.remove(ids, {
+    success: () => {
+      selectedIndexs.value = []
+      if (table.value) {
+        table.value.clearSelection() // 清空表格勾选状态
+      }
+    }
+  })
+}
+
 const callAfterSaleAction = async (action, item, extra = {}) => {
   uni.showLoading({ title: '处理中', mask: true })
   try {

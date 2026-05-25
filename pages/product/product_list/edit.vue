@@ -467,6 +467,16 @@
         }
         const updateValue = { ...value };
         delete updateValue._id;
+        // 确保数字字段为正确类型，防止数据库验证失败
+        updateValue.stock = parseInt(updateValue.stock, 10) || 0
+        updateValue.sales = parseInt(updateValue.sales, 10) || 0
+        updateValue.status = parseInt(updateValue.status, 10) || 1
+        updateValue.price = parseFloat(updateValue.price) || 0
+        if (updateValue.originalPrice) updateValue.originalPrice = parseFloat(updateValue.originalPrice)
+        if (updateValue.specialPrice) updateValue.specialPrice = parseFloat(updateValue.specialPrice)
+        if (updateValue.freight_fee) updateValue.freight_fee = parseFloat(updateValue.freight_fee)
+        if (updateValue.install_fee) updateValue.install_fee = parseFloat(updateValue.install_fee)
+        if (updateValue.rating) updateValue.rating = parseFloat(updateValue.rating)
         return db.collection(dbCollectionName).doc(this.formDataId).update(updateValue).then(() => {
           uni.showToast({
             title: '修改成功'

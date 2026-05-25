@@ -397,6 +397,17 @@
         });
       },
       submitForm(value) {
+        // 确保数字字段为正确类型，防止数据库验证失败
+        value.stock = parseInt(value.stock, 10) || 0
+        value.sales = parseInt(value.sales, 10) || 0
+        value.status = parseInt(value.status, 10) || 1
+        value.price = parseFloat(value.price) || 0
+        if (value.originalPrice) value.originalPrice = parseFloat(value.originalPrice)
+        if (value.specialPrice) value.specialPrice = parseFloat(value.specialPrice)
+        if (value.freight_fee) value.freight_fee = parseFloat(value.freight_fee)
+        if (value.install_fee) value.install_fee = parseFloat(value.install_fee)
+        if (value.rating) value.rating = parseFloat(value.rating)
+
         return db.collection(dbCollectionName).add(value).then(() => {
           uni.showToast({
             title: '新增成功'
