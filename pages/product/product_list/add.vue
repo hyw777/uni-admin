@@ -74,23 +74,32 @@
           <button class="uni-button" type="default" size="mini" @click="addPointItem">+ 添加卖点</button>
         </view>
       </uni-forms-item>
-      <uni-forms-item name="detailImages" label="商品详情长图说明">
-        <uni-file-picker file-mediatype="image" :limit="8" return-type="array" v-model="detailImagesValue"></uni-file-picker>
-        <view class="multi-preview" v-if="detailImagePreviewUrls.length">
-          <image v-for="(url, index) in detailImagePreviewUrls" :key="`detail-preview-${index}`" :src="url" mode="aspectFill"></image>
-        </view>
+      <uni-forms-item name="freight_fee" label="运费（小件商品）">
+        <uni-easyinput placeholder="按金额算" type="number" v-model="formData.freight_fee"></uni-easyinput>
       </uni-forms-item>
-      <uni-forms-item name="serviceImages" label="服务保障长图说明">
-        <uni-file-picker file-mediatype="image" :limit="8" return-type="array" v-model="serviceImagesValue"></uni-file-picker>
-        <view class="multi-preview" v-if="serviceImagePreviewUrls.length">
-          <image v-for="(url, index) in serviceImagePreviewUrls" :key="`service-preview-${index}`" :src="url" mode="aspectFill"></image>
-        </view>
+      <uni-forms-item name="install_fee" label="送装费">
+        <uni-easyinput placeholder="按金额算" type="number" v-model="formData.install_fee"></uni-easyinput>
       </uni-forms-item>
+      <uni-forms-item name="is_large_item" label="大件商品">
+        <switch @change="binddata('is_large_item', $event.detail.value)" :checked="formData.is_large_item"></switch>
+      </uni-forms-item>
+      <view v-if="formData.is_large_item">
+        <view class="uni-group" style="padding-left: 100px; margin-bottom: 10px;">
+          <text style="color: #e43d33; font-size: 12px;">提示：当前为大件商品，运费将严格按照所选运费模板规则计算</text>
+        </view>
+        <uni-forms-item name="freight_template_id" label="运费模板">
+          <uni-data-select :localdata="freightTemplateOptions" v-model="formData.freight_template_id" placeholder="选择运费模板"></uni-data-select>
+        </uni-forms-item>
+        <uni-forms-item name="weight" label="重量(kg)">
+          <uni-easyinput placeholder="请输入重量，用于按重量计费" type="number" v-model="formData.weight"></uni-easyinput>
+        </uni-forms-item>
+        <uni-forms-item name="volume" label="体积(m³)">
+          <uni-easyinput placeholder="请输入体积，用于按体积计费" type="number" v-model="formData.volume"></uni-easyinput>
+        </uni-forms-item>
+      </view>
       <view class="uni-button-group">
         <button type="primary" class="uni-button" style="width: 100px;" @click="submit">提交</button>
-        <navigator open-type="navigateBack" style="margin-left: 15px;">
-          <button class="uni-button" style="width: 100px;">返回</button>
-        </navigator>
+        <button class="uni-button" style="width: 100px; margin-left: 15px;" @click="goBack">返回</button>
       </view>
     </uni-forms>
   </view>
@@ -139,6 +148,10 @@
         promotion_desc: '',
         freight_fee: null,
         install_fee: null,
+        freight_template_id: '',
+        is_large_item: false,
+        weight: 0,
+        volume: 0,
         service_tags: [],
         materials: '',
         dimensions: '',
@@ -162,6 +175,7 @@
         currentChildOptions: [],
         brandOptions: [],
         storeOptions: [],
+        freightTemplateOptions: [],
         formOptions: {
           space_tags_localdata: [
             { value: '精选', text: '精选' },
@@ -214,6 +228,7 @@
       this.loadCategoryOptions();
       this.loadBrandOptions();
       this.loadStoreOptions();
+      this.loadFreightTemplateOptions();
     },
     onReady() {
       this.$refs.form.setRules(this.rules);
@@ -334,6 +349,15 @@
             }))
         });
       },
+      loadFreightTemplateOptions() {
+        return db.collection('freight_template').field('_id,name').get().then((res) => {
+          const list = (res.result && res.result.data) || []
+          this.freightTemplateOptions = list.map((item) => ({
+            value: item._id,
+            text: item.name || ''
+          }))
+        });
+      },
       initDynamicFields() {
         this.sellingPointsEntries = Array.isArray(this.formData.sellingPoints) && this.formData.sellingPoints.length ? [...this.formData.sellingPoints] : [''];
         this.serviceTagsEntries = Array.isArray(this.formData.service_tags) && this.formData.service_tags.length ? [...this.formData.service_tags] : [''];
@@ -406,6 +430,8 @@
         if (value.specialPrice) value.specialPrice = parseFloat(value.specialPrice)
         if (value.freight_fee) value.freight_fee = parseFloat(value.freight_fee)
         if (value.install_fee) value.install_fee = parseFloat(value.install_fee)
+        if (value.weight) value.weight = parseFloat(value.weight)
+        if (value.volume) value.volume = parseFloat(value.volume)
         if (value.rating) value.rating = parseFloat(value.rating)
 
         return db.collection(dbCollectionName).add(value).then(() => {
