@@ -1,0 +1,49 @@
+{
+	"bsonType": "object",
+	"permission": {
+		"read": true,
+		"create": "auth.role == 'admin'",
+		"update": "auth.role == 'admin'",
+		"delete": "auth.role == 'admin'"
+	},
+	"properties": {
+		"_id": {
+			"description": "ID"
+		},
+		"code": {
+			"description": "快递100拼音编码",
+			"bsonType": "string"
+		},
+		"name": {
+			"description": "快递公司名称",
+			"bsonType": "string"
+		},
+		"sort": {
+			"description": "排序",
+			"bsonType": "int"
+		},
+		"is_common": {
+			"description": "是否常用",
+			"bsonType": "bool"
+		}
+	},
+	"indexes": [
+		{
+			"key": {
+				"code": 1
+			},
+			"name": "code_unique",
+			"unique": true
+		},
+		{
+			"key": {
+				"sort": 1
+			}
+		},
+		{
+			"key": {
+				"is_common": 1
+			}
+		}
+	]
+}

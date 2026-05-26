@@ -56,6 +56,16 @@ const validator = {
         "format": "object"
       }
     ]
+  },
+  "contact_mobile": {
+    "rules": [
+      {
+        "required": true
+      },
+      {
+        "format": "string"
+      }
+    ]
   }
 }
 

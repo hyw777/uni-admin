@@ -16,7 +16,7 @@
       </view>
     </view>
     <view class="uni-container">
-      <unicloud-db ref="udb" :collection="collectionList" field="name,logo,address,city,rating,recentSales,tags,create_date" :where="where" page-data="replace"
+      <unicloud-db ref="udb" :collection="collectionList" field="name,logo,address,city,rating,recentSales,tags,contact_mobile,create_date" :where="where" page-data="replace"
         :orderby="orderby" :getcount="true" :page-size="options.pageSize" :page-current="options.pageCurrent"
         v-slot:default="{data,pagination,loading,error,options}" :options="options" loadtime="manual" @load="onqueryload">
         <uni-table ref="table" :loading="loading" :emptyText="error.message || '没有更多数据'" border stripe type="selection" @selection-change="selectionChange">
@@ -28,6 +28,7 @@
             <uni-th align="center" filter-type="range" @filter-change="filterChange($event, 'rating')" sortable @sort-change="sortChange($event, 'rating')">rating</uni-th>
             <uni-th align="center" filter-type="search" @filter-change="filterChange($event, 'recentSales')" sortable @sort-change="sortChange($event, 'recentSales')">recentSales</uni-th>
             <uni-th align="center" sortable @sort-change="sortChange($event, 'tags')">tags</uni-th>
+            <uni-th align="center" filter-type="search" @filter-change="filterChange($event, 'contact_mobile')">联系电话</uni-th>
             <uni-th align="center" filter-type="timestamp" @filter-change="filterChange($event, 'create_date')" sortable @sort-change="sortChange($event, 'create_date')">create_date</uni-th>
             <uni-th align="center">操作</uni-th>
           </uni-tr>
@@ -42,6 +43,7 @@
             <uni-td align="center">{{item.rating}}</uni-td>
             <uni-td align="center">{{item.recentSales}}</uni-td>
             <uni-td align="center">{{item.tags}}</uni-td>
+            <uni-td align="center">{{item.contact_mobile || '-'}}</uni-td>
             <uni-td align="center">
               <uni-dateformat :threshold="[0, 0]" :date="item.create_date"></uni-dateformat>
             </uni-td>
@@ -107,6 +109,7 @@
             "rating": "rating",
             "recentSales": "recentSales",
             "tags": "tags",
+            "contact_mobile": "联系电话",
             "create_date": "create_date"
           }
         },

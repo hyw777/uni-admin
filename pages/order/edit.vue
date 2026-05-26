@@ -92,13 +92,17 @@
       </view>
       <view class="ship-inline-field">
         <text class="ship-inline-label">快递公司</text>
-        <view class="option-grid">
-          <view
-            v-for="opt in logisticsCompanyOptions"
-            :key="opt.value"
-            :class="['option-item', shipData.logistics_company === opt.value ? 'option-item-active' : '']"
-            @click="shipData.logistics_company = opt.value"
-          >{{ opt.text }}</view>
+        <picker mode="selector" :range="expressList" range-key="name" @change="onExpressChange" :value="expressIndex">
+          <view class="express-picker">
+            <text :class="expressIndex >= 0 ? 'selected-text' : 'placeholder'">
+              {{ expressIndex >= 0 ? expressList[expressIndex].name : '请选择快递公司' }}
+            </text>
+            <uni-icons type="right" size="14" color="#999"></uni-icons>
+          </view>
+        </picker>
+        <!-- 其他快递时显示手动输入框 -->
+        <view v-if="showOtherExpress" class="other-express-input">
+          <uni-easyinput v-model="shipData.logistics_company_other" placeholder="请输入快递公司名称" />
         </view>
       </view>
       <view class="ship-inline-field">
@@ -163,49 +167,67 @@ export default {
         delivery_method: 1,
         delivery_method_text: '快递',
         logistics_company: '',
+        logistics_company_code: '',
+        logistics_company_other: '',
         logistics_no: ''
       },
+      expressList: [],
+      expressIndex: -1,
+      showOtherExpress: false,
       deliveryMethodOptions: [
         { text: '快递', value: 1 },
         { text: '大件物流', value: 2 },
         { text: '送货入户带安装', value: 3 },
         { text: '同城车队', value: 4 }
-      ],
-      logisticsCompanyOptions: [
-        { text: '顺丰速运', value: 'shunfeng' },
-        { text: '圆通速递', value: 'yuantong' },
-        { text: '中通快递', value: 'zhongtong' },
-        { text: '韵达快递', value: 'yunda' },
-        { text: '申通快递', value: 'shentong' },
-        { text: '极兔速递', value: 'jtexpress' },
-        { text: '京东物流', value: 'jd' },
-        { text: '邮政EMS', value: 'ems' },
-        { text: '德邦快递', value: 'debangkuaidi' },
-        { text: '中国邮政', value: 'youzhengguonei' },
-        { text: '德邦物流', value: 'debangwuliu' },
-        { text: '跨越速运', value: 'kuayue' },
-        { text: '宅急送', value: 'zhaijisong' },
-        { text: '其他', value: 'other' }
       ]
     }
   },
   computed: {
-    logisticsCompanyIndex() {
-      const idx = this.logisticsCompanyOptions.findIndex(o => o.value === this.shipData.logistics_company)
-      return idx >= 0 ? idx : 0
-    }
   },
   onLoad(e) {
     if (e.id) {
       this.formDataId = e.id
       this.getDetail(e.id)
     }
+    // 加载快递公司列表
+    this.loadExpressList()
   },
   methods: {
+    // 加载快递公司列表
+    async loadExpressList() {
+      try {
+        const res = await uniCloud.callFunction({
+          name: 'express-company-api',
+          data: { action: 'getAll' }
+        })
+        if (res.result && res.result.errCode === 0) {
+          // 添加"其他"选项
+          this.expressList = [...res.result.data, { name: '其他', code: 'other', sort: 99999 }]
+        }
+      } catch (e) {
+        console.error('加载快递列表失败', e)
+      }
+    },
+    // 快递公司选择变化
+    onExpressChange(e) {
+      this.expressIndex = Number(e.detail.value)
+      const selected = this.expressList[this.expressIndex]
+      if (selected) {
+        if (selected.code === 'other') {
+          this.showOtherExpress = true
+          this.shipData.logistics_company = ''
+          this.shipData.logistics_company_code = ''
+        } else {
+          this.showOtherExpress = false
+          this.shipData.logistics_company = selected.name
+          this.shipData.logistics_company_code = selected.code
+        }
+      }
+    },
     getDetail(id) {
       uni.showLoading({ mask: true })
       db.collection(dbCollectionName).doc(id).field(
-        'order_type,items,total_fee,status,address,redemption_store_name,redemption_store_address,redemption_store_mobile,delivery_method,logistics_company,logistics_no,create_date'
+        'order_type,items,total_fee,status,address,redemption_store_name,redemption_store_address,redemption_store_mobile,delivery_method,logistics_company,logistics_company_code,logistics_no,create_date'
       ).get().then(res => {
         const data = res.result.data[0]
         if (data) {
@@ -214,7 +236,15 @@ export default {
           this.shipData.delivery_method = data.delivery_method || 1
           this.shipData.delivery_method_text = this.deliveryMethodText(data.delivery_method) || '快递'
           this.shipData.logistics_company = data.logistics_company || ''
+          this.shipData.logistics_company_code = data.logistics_company_code || ''
           this.shipData.logistics_no = data.logistics_no || ''
+          // 如果有已选的快递公司，设置索引
+          if (data.logistics_company_code) {
+            const idx = this.expressList.findIndex(e => e.code === data.logistics_company_code)
+            if (idx >= 0) {
+              this.expressIndex = idx
+            }
+          }
         }
       }).catch(err => {
         uni.showModal({ content: err.message || '请求服务失败', showCancel: false })
@@ -222,25 +252,50 @@ export default {
         uni.hideLoading()
       })
     },
-    onLogisticsCompanyChange(idx) {
-      this.shipData.logistics_company = this.logisticsCompanyOptions[idx].value
-    },
     submitShip() {
-      if (!this.shipData.logistics_company.trim()) {
-        uni.showToast({ title: '请选择快递公司', icon: 'none' })
-        return
+      // 检查快递公司选择
+      if (this.showOtherExpress) {
+        if (!this.shipData.logistics_company_other.trim()) {
+          uni.showToast({ title: '请输入快递公司名称', icon: 'none' })
+          return
+        }
+        this.shipData.logistics_company = this.shipData.logistics_company_other.trim()
+        this.shipData.logistics_company_code = ''
+      } else {
+        if (!this.shipData.logistics_company.trim()) {
+          uni.showToast({ title: '请选择快递公司', icon: 'none' })
+          return
+        }
       }
       if (!this.shipData.logistics_no.trim()) {
         uni.showToast({ title: '请填写快递单号', icon: 'none' })
         return
       }
       uni.showLoading({ mask: true })
-      db.collection(dbCollectionName).doc(this.formDataId).update({
+      
+      const updateData = {
         status: 2,
         delivery_method: this.shipData.delivery_method,
         logistics_company: this.shipData.logistics_company,
+        logistics_company_code: this.shipData.logistics_company_code,
         logistics_no: this.shipData.logistics_no.trim()
-      }).then(res => {
+      }
+      
+      db.collection(dbCollectionName).doc(this.formDataId).update(updateData).then(async res => {
+        // 调用快递100订阅
+        if (this.shipData.logistics_company_code) {
+          try {
+            await uniCloud.callFunction({
+              name: 'order-api',
+              data: {
+                action: 'subscribeLogistics',
+                params: { orderId: this.formDataId }
+              }
+            })
+          } catch (e) {
+            console.warn('订阅快递100失败（不影响发货）:', e)
+          }
+        }
         uni.showToast({ title: '发货成功' })
         setTimeout(() => uni.navigateBack(), 800)
       }).catch(err => {
@@ -264,14 +319,21 @@ export default {
       return map[v] ?? '-'
     },
     logisticsCompanyName(code) {
+      if (!code) return '-'
+      // 先从列表中查找
+      if (this.expressList && this.expressList.length > 0) {
+        const found = this.expressList.find(e => e.code === code)
+        if (found) return found.name
+      }
+      // 兜底映射表
       const map = {
         'shunfeng': '顺丰速运', 'yuantong': '圆通速递', 'zhongtong': '中通快递',
         'yunda': '韵达快递', 'shentong': '申通快递', 'jtexpress': '极兔速递',
-        'jd': '京东物流', 'ems': '邮政EMS', 'debangkuaidi': '德邦快递',
+        'jd': '京东物流', 'ems': 'EMS', 'debangkuaidi': '德邦快递',
         'youzhengguonei': '中国邮政', 'debangwuliu': '德邦物流', 'kuayue': '跨越速运',
         'zhaijisong': '宅急送', 'other': '其他'
       }
-      return map[code] || code || '-'
+      return map[code] || code
     },
     formatAddress(addr) {
       if (!addr) return '-'
@@ -432,6 +494,29 @@ export default {
   border-color: #1890ff;
   color: #1890ff;
   background: #e6f7ff;
+}
+
+/* 快递公司选择器样式 */
+.express-picker {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border: 1px solid #d9d9d9;
+  border-radius: 4px;
+  background: #fff;
+  min-height: 36px;
+}
+.express-picker .selected-text {
+  font-size: 13px;
+  color: #333;
+}
+.express-picker .placeholder {
+  font-size: 13px;
+  color: #999;
+}
+.other-express-input {
+  margin-top: 10px;
 }
 
 .logistics-no {

@@ -1,0 +1,7 @@
+{
+	"name": "express-company-api",
+	"version": "1.0.0",
+	"description": "快递公司API",
+	"main": "index.js",
+	"dependencies": {}
+}

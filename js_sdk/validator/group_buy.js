@@ -63,6 +63,14 @@ const validator = {
       }
     ]
   },
+  "stock": {
+    "rules": [
+      {
+        "format": "int"
+      }
+    ],
+    "defaultValue": 999
+  },
   "sold": {
     "rules": [
       {

@@ -28,6 +28,9 @@
       <uni-forms-item name="tags" label="标签">
         <uni-data-checkbox :multiple="true" v-model="formData.tags" :localdata="formOptions.tags_localdata"></uni-data-checkbox>
       </uni-forms-item>
+      <uni-forms-item name="contact_mobile" label="联系电话" required>
+        <uni-easyinput placeholder="用于用户联系门店，必填" v-model="formData.contact_mobile" type="number" trim="both"></uni-easyinput>
+      </uni-forms-item>
       <view class="uni-button-group">
         <button type="primary" class="uni-button" style="width: 100px;" @click="submit">提交</button>
         <navigator open-type="navigateBack" style="margin-left: 15px;">
@@ -67,7 +70,8 @@
         "rating": 0,
         "recentSales": "",
         "tags": [],
-        "location": null
+        "location": null,
+        "contact_mobile": ""
       }
       return {
         logoValue: null,
@@ -80,7 +84,7 @@
           ]
         },
         rules: {
-          ...getValidator(['name', 'logo', 'address', 'city', 'rating', 'recentSales', 'tags', 'location'])
+          ...getValidator(['name', 'logo', 'address', 'city', 'rating', 'recentSales', 'tags', 'location', 'contact_mobile'])
         }
       }
     },
@@ -156,7 +160,7 @@
         uni.showLoading({
           mask: true
         })
-        db.collection(dbCollectionName).doc(id).field("name,logo,address,city,rating,recentSales,tags,location").get().then((res) => {
+        db.collection(dbCollectionName).doc(id).field("name,logo,address,city,rating,recentSales,tags,location,contact_mobile").get().then((res) => {
           const data = res.result.data[0]
           if (data) {
             this.formData = data

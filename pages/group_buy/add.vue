@@ -23,12 +23,15 @@
       <uni-forms-item name="specialPrice" label="会员价">
         <uni-easyinput placeholder="Special/VIP user price" type="number" v-model="formData.specialPrice"></uni-easyinput>
       </uni-forms-item>
+      <uni-forms-item name="stock" label="库存">
+        <uni-easyinput placeholder="Remaining stock count" type="number" v-model="formData.stock"></uni-easyinput>
+      </uni-forms-item>
       
       <uni-forms-item name="image" label="封面图">
-        <uni-file-picker v-model="imageValue" return-type="object" :image-styles="imageStyles"></uni-file-picker>
+        <uni-file-picker ref="imagePicker" v-model="imageValue" file-mediatype="image" return-type="object" :image-styles="imageStyles" @success="onImageSuccess"></uni-file-picker>
       </uni-forms-item>
       <uni-forms-item name="images" label="轮播图">
-        <uni-file-picker v-model="imagesValue" return-type="array" :image-styles="imageStyles"></uni-file-picker>
+        <uni-file-picker ref="imagesPicker" v-model="imagesValue" file-mediatype="image" return-type="array" :image-styles="imageStyles" @success="onImagesSuccess"></uni-file-picker>
       </uni-forms-item>
       <uni-forms-item name="description" label="详情图文">
         <uni-easyinput placeholder="Rich text detail description" v-model="formData.description"></uni-easyinput>
@@ -81,7 +84,6 @@
 
   export default {
     data() {
-      const imageStyles = { width: 100, height: 100, border: { radius: "8px" } };
       let formData = {
         "store_id": "",
         "title": "",
@@ -90,6 +92,8 @@
         "price": null,
         "originalPrice": null,
         "specialPrice": null,
+        "stock": 999,
+        "sold": 0,
         "image": "",
         "images": [],
         "description": "",
@@ -104,6 +108,7 @@
         imagesValue: [],
         specsList: [],
         submitting: false,
+        imageStyles: { width: 100, height: 100, border: { radius: "8px" } },
         rules: {
           ...getValidator(Object.keys(formData))
         }
@@ -121,27 +126,11 @@
       },
       async submit() {
         if (this.submitting) return;
-        
+
         uni.showLoading({ mask: true });
         this.submitting = true;
-        
-        try {
-          // 处理封面图 - 确保获取 cloud:// 开头的 fileID
-          if (this.imageValue) {
-            this.formData.image = this.imageValue.fileID || this.imageValue.url || '';
-          } else {
-            this.formData.image = '';
-          }
-          
-          // 处理轮播图
-          if (this.imagesValue && this.imagesValue.length) {
-            this.formData.images = this.imagesValue.map(item => item.fileID || item.url);
-          } else {
-            this.formData.images = [];
-          }
-          
-          this.formData.specs = this.specsList.filter(item => item.label && item.value).map(item => ({ label: item.label, value: item.value }));
 
+        try {
           const res = await this.$refs.form.validate();
           await this.submitForm(res);
         } catch (err) {
@@ -149,6 +138,18 @@
         } finally {
           this.submitting = false;
           uni.hideLoading();
+        }
+      },
+
+      onImageSuccess(e) {
+        if (e && e.tempFilePaths && e.tempFilePaths.length > 0) {
+          this.formData.image = e.tempFilePaths[0];
+        }
+      },
+
+      onImagesSuccess(e) {
+        if (e && e.tempFilePaths && e.tempFilePaths.length > 0) {
+          this.formData.images = e.tempFilePaths;
         }
       },
 

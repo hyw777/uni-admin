@@ -115,7 +115,7 @@
       </unicloud-db>
     </view>
 
-    <!-- 单个发货弹窗（纯 uni-popup，彻底解决 picker 兼容问题） -->
+    <!-- 单个发货弹窗（底部弹出 + 数据库快递公司） -->
     <uni-popup ref="shipPopup" type="bottom">
       <view class="ship-popup">
         <!-- 标题栏 -->
@@ -125,36 +125,91 @@
           <text class="ship-popup-close" @click="closeShipDialog">×</text>
         </view>
 
-        <!-- 表单内容 -->
-        <view class="ship-popup-body">
-          <!-- 配送方式：点击弹出选项列表 -->
-          <view class="ship-field">
-            <text class="ship-field-label">配送方式 <text class="required">*</text></text>
-            <view class="option-list">
-              <view
-                v-for="opt in deliveryMethodOptions"
-                :key="opt.value"
-                :class="['option-item', shipForm.delivery_method === opt.value ? 'option-item-active' : '']"
-                @click="shipForm.delivery_method = opt.value"
-              >{{ opt.text }}</view>
-            </view>
+        <!-- 搜索框 -->
+        <view class="ship-search-wrap">
+          <view class="ship-search-box">
+            <text class="icon-search">🔍</text>
+            <input
+              class="ship-search-input"
+              v-model="expressSearchKeyword"
+              placeholder="搜索快递公司"
+              @input="filterExpressList"
+            />
+            <text v-if="expressSearchKeyword" class="icon-clear" @click="clearExpressSearch">×</text>
           </view>
+        </view>
 
-          <!-- 快递公司：点击弹出选项列表 -->
-          <view class="ship-field">
-            <text class="ship-field-label">快递公司 <text class="required">*</text></text>
+        <!-- 快递公司列表（支持分类折叠） -->
+        <view class="ship-popup-body">
+          <!-- 常用快递 -->
+          <view class="express-section" v-if="!expressSearchKeyword && commonExpressList.length">
+            <view class="express-section-title">
+              <text>常用快递</text>
+            </view>
             <view class="option-grid">
               <view
-                v-for="opt in logisticsCompanyOptions"
-                :key="opt.value"
-                :class="['option-item', shipForm.logistics_company === opt.value ? 'option-item-active' : '']"
-                @click="shipForm.logistics_company = opt.value"
-              >{{ opt.text }}</view>
+                v-for="opt in commonExpressList"
+                :key="opt.code"
+                :class="['option-item', shipForm.logistics_company === opt.code ? 'option-item-active' : '']"
+                @click="selectExpress(opt)"
+              >{{ opt.name }}</view>
             </view>
           </view>
 
-          <!-- 快递单号 -->
-          <view class="ship-field">
+          <!-- 其他快递（未搜索时折叠展示） -->
+          <view class="express-section" v-if="!expressSearchKeyword && otherExpressList.length">
+            <view class="express-section-title" @click="showOtherSection = !showOtherSection">
+              <text>其他快递</text>
+              <text class="section-arrow">{{ showOtherSection ? '▲' : '▼' }}</text>
+            </view>
+            <view class="option-grid" v-if="showOtherSection">
+              <view
+                v-for="opt in otherExpressList"
+                :key="opt.code"
+                :class="['option-item', shipForm.logistics_company === opt.code ? 'option-item-active' : '']"
+                @click="selectExpress(opt)"
+              >{{ opt.name }}</view>
+            </view>
+          </view>
+
+          <!-- 搜索结果 -->
+          <view class="express-section" v-if="expressSearchKeyword">
+            <view class="express-section-title">
+              <text>搜索结果</text>
+              <text class="search-count" v-if="filteredExpressList.length">({{ filteredExpressList.length }})</text>
+            </view>
+            <view class="option-grid" v-if="filteredExpressList.length">
+              <view
+                v-for="opt in filteredExpressList"
+                :key="opt.code"
+                :class="['option-item', shipForm.logistics_company === opt.code ? 'option-item-active' : '']"
+                @click="selectExpress(opt)"
+              >{{ opt.name }}</view>
+            </view>
+            <view class="search-empty" v-else>未找到匹配的快递公司</view>
+          </view>
+
+          <!-- 其他快递公司（手动输入） -->
+          <view class="express-section">
+            <view class="express-section-title">
+              <text>其他快递</text>
+            </view>
+            <view :class="['option-item', shipForm.is_other ? 'option-item-active' : '']" @click="selectOtherExpress">
+              自定义快递公司
+            </view>
+          </view>
+          <view v-if="shipForm.is_other" class="other-input-wrap">
+            <uni-easyinput
+              v-model="shipForm.other_company_name"
+              placeholder="请输入快递公司名称"
+              :focus="otherInputFocused"
+            ></uni-easyinput>
+          </view>
+        </view>
+
+        <!-- 快递单号输入 -->
+        <view class="ship-popup-body" style="padding-top: 0;">
+          <view class="ship-field" style="margin-bottom: 0;">
             <text class="ship-field-label">快递单号 <text class="required">*</text></text>
             <uni-easyinput v-model="shipForm.logistics_no" placeholder="请填写快递单号" />
           </view>
@@ -162,6 +217,10 @@
 
         <!-- 确认按钮 -->
         <view class="ship-popup-footer">
+          <view class="footer-tip" v-if="shipForm.is_other">
+            <text>已选择：</text>
+            <text class="tip-other">{{ shipForm.other_company_name || '请填写公司名称' }}</text>
+          </view>
           <button type="primary" class="ship-confirm-btn" @click="doSingleShip">确认发货</button>
         </view>
       </view>
@@ -174,30 +233,65 @@
           <text class="ship-popup-title">批量发货</text>
           <text class="ship-popup-close" @click="closeBatchShipDialog">×</text>
         </view>
-        <view class="ship-popup-body">
+        <view class="ship-popup-body" style="max-height: 55vh;">
+
+          <!-- 第一步：上传文件 -->
           <view class="batch-tip">
-            <text>上传 Excel/CSV，格式：</text>
+            <text>上传 CSV 文件（Excel 另存为 CSV 格式），格式说明：</text>
             <view class="batch-example">
-              <text>第一列：订单ID（完整ID）</text>
-              <text>第二列：物流单号</text>
-              <text class="batch-note">提示：Excel 第一行为表头（可留空），从第二行开始为数据</text>
+              <view class="csv-row header">第一行（表头）</view>
+              <view class="csv-row"><text>订单ID</text><text>物流单号</text><text>快递公司编码（可选）</text></view>
+              <view class="csv-row"><text>64a1b2c3...</text><text>SF100123456</text><text>yuantong（不填则用下方选择的）</text></view>
+              <view class="csv-row"><text>65c3d4e5...</text><text>YT987654321</text><text>yuantong</text></view>
+              <view class="batch-note">提示：CSV 文件用 Excel 打开后，另存为"CSV(逗号分隔)"格式即可</view>
             </view>
           </view>
+
           <view class="upload-wrap">
-            <button size="mini" type="primary" @click="chooseBatchFile">{{ batchFileName || '选择 Excel/CSV 文件' }}</button>
+            <button size="mini" type="primary" @click="chooseBatchFile">{{ batchFileName || '选择 CSV 文件' }}</button>
             <text v-if="batchFileName" class="file-name">{{ batchFileName }}</text>
           </view>
+
+          <!-- 第二步：解析预览 + 选择默认快递公司 -->
           <view v-if="batchPreview.length" class="batch-preview">
-            <view class="batch-preview-title">预览（前5条）：</view>
-            <view v-for="(row, idx) in batchPreview" :key="idx" class="batch-preview-row">
-              <text>订单：{{ row.orderId.substring(0, 12) }}...</text>
-              <text>单号：{{ row.logisticsNo }}</text>
+            <view class="batch-preview-title">预览（前5条，共 {{ Object.keys(batchOrdersMap).length }} 条）：</view>
+            <view class="preview-table">
+              <view class="preview-th">
+                <text class="th-cell">订单ID</text>
+                <text class="th-cell">快递公司</text>
+                <text class="th-cell">物流单号</text>
+              </view>
+              <view v-for="(row, idx) in batchPreview" :key="idx" class="preview-tr">
+                <text class="td-cell td-id">{{ row.orderId.substring(0, 10) }}...</text>
+                <text class="td-cell">{{ row.company || '（见下方默认）' }}</text>
+                <text class="td-cell td-no">{{ row.logisticsNo }}</text>
+              </view>
             </view>
           </view>
+
+          <!-- 第三步：选择默认快递公司（针对CSV中未填写快递公司的行） -->
+          <view v-if="batchPreview.length" class="batch-express-section">
+            <text class="batch-express-label">默认快递公司</text>
+            <view class="express-chips">
+              <view
+                v-for="opt in quickExpressOptions"
+                :key="opt.code"
+                :class="['express-chip', batchDefaultCompany === opt.code ? 'express-chip-active' : '']"
+                @click="batchDefaultCompany = opt.code"
+              >{{ opt.name }}</view>
+            </view>
+          </view>
+
           <view v-if="batchErrorMsg" class="batch-error">{{ batchErrorMsg }}</view>
         </view>
+
         <view class="ship-popup-footer">
-          <button type="primary" class="ship-confirm-btn" :disabled="!Object.keys(batchOrdersMap).length" @click="doBatchShip">确认批量发货</button>
+          <button
+            type="primary"
+            class="ship-confirm-btn"
+            :disabled="!Object.keys(batchOrdersMap).length"
+            @click="doBatchShip"
+          >确认批量发货</button>
         </view>
       </view>
     </uni-popup>
@@ -270,30 +364,18 @@ export default {
       shipForm: {
         delivery_method: 1,
         logistics_company: '',
-        logistics_no: ''
+        logistics_no: '',
+        is_other: false,
+        other_company_name: ''
       },
-      logisticsCompanyOptions: [
-        { text: '顺丰速运', value: 'shunfeng' },
-        { text: '圆通速递', value: 'yuantong' },
-        { text: '中通快递', value: 'zhongtong' },
-        { text: '韵达快递', value: 'yunda' },
-        { text: '申通快递', value: 'shentong' },
-        { text: '极兔速递', value: 'jtexpress' },
-        { text: '京东物流', value: 'jd' },
-        { text: '邮政EMS', value: 'ems' },
-        { text: '德邦快递', value: 'debangkuaidi' },
-        { text: '中国邮政', value: 'youzhengguonei' },
-        { text: '德邦物流', value: 'debangwuliu' },
-        { text: '跨越速运', value: 'kuayue' },
-        { text: '安能物流', value: 'annengwuliu' },
-        { text: '百世快运', value: 'baishiwuliu' },
-        { text: '宅急送', value: 'zhaijisong' },
-        { text: '苏宁物流', value: 'suning' },
-        { text: 'UPS', value: 'ups' },
-        { text: 'DHL', value: 'dhl' },
-        { text: 'FedEx', value: 'fedex' },
-        { text: '其他', value: 'other' }
-      ],
+      // 快递公司列表（从数据库动态加载）
+      expressList: [],
+      commonExpressList: [],
+      otherExpressList: [],
+      filteredExpressList: [],
+      expressSearchKeyword: '',
+      showOtherSection: false,
+      otherInputFocused: false,
       deliveryMethodOptions: [
         { text: '快递', value: 1 },
         { text: '大件物流', value: 2 },
@@ -306,6 +388,19 @@ export default {
       batchPreview: [],
       batchErrorMsg: '',
       batchOrdersMap: {},
+      batchDefaultCompany: 'yuantong',
+      quickExpressOptions: [
+        { name: '圆通速递', code: 'yuantong' },
+        { name: '中通快递', code: 'zhongtong' },
+        { name: '韵达快递', code: 'yunda' },
+        { name: '申通快递', code: 'shentong' },
+        { name: '极兔速递', code: 'jtexpress' },
+        { name: '顺丰速运', code: 'shunfeng' },
+        { name: '京东物流', code: 'jd' },
+        { name: 'EMS', code: 'ems' },
+        { name: '德邦快递', code: 'debangkuaidi' },
+        { name: '中国邮政', code: 'youzhengguonei' }
+      ],
 
       // 状态筛选
       statusFilterOptions: STATUS_FILTER_OPTIONS
@@ -433,14 +528,67 @@ export default {
       return [addr.province, addr.city, addr.district, addr.address].filter(Boolean).join('')
     },
 
+    // ── 快递公司列表 ──────────────────────────────────
+    async loadExpressListFromDB() {
+      if (this.expressList.length) return // 已加载则跳过
+      try {
+        const res = await uniCloud.callFunction({
+          name: 'express-company-api',
+          data: { action: 'getAll' }
+        })
+        if (res.result && res.result.errCode === 0) {
+          this.expressList = res.result.data || []
+          this._splitExpressLists()
+        }
+      } catch (e) {
+        console.error('加载快递公司列表失败', e)
+      }
+    },
+    _splitExpressLists() {
+      this.commonExpressList = this.expressList.filter(e => e.is_common).slice(0, 50)
+      this.otherExpressList = this.expressList.filter(e => !e.is_common).slice(0, 50)
+    },
+    filterExpressList() {
+      const kw = this.expressSearchKeyword.trim().toLowerCase()
+      if (!kw) {
+        this.filteredExpressList = []
+        return
+      }
+      this.filteredExpressList = this.expressList.filter(e =>
+        e.name.toLowerCase().includes(kw) || e.code.toLowerCase().includes(kw)
+      )
+    },
+    clearExpressSearch() {
+      this.expressSearchKeyword = ''
+      this.filteredExpressList = []
+    },
+    selectExpress(opt) {
+      this.shipForm.logistics_company = opt.code
+      this.shipForm.is_other = false
+      this.shipForm.other_company_name = ''
+      this.showOtherSection = false
+    },
+    selectOtherExpress() {
+      this.shipForm.is_other = true
+      this.shipForm.logistics_company = ''
+      this.otherInputFocused = true
+      this.$nextTick(() => { this.otherInputFocused = false })
+    },
+
     // ── 单个发货 ──────────────────────────────────
     openShipDialog(item) {
       this.shipTarget = item
       this.shipForm = {
         delivery_method: item.delivery_method || 1,
-        logistics_company: item.logistics_company || '',
-        logistics_no: item.logistics_no || ''
+        logistics_company: item.logistics_company_code || item.logistics_company || '',
+        logistics_no: item.logistics_no || '',
+        is_other: false,
+        other_company_name: ''
       }
+      this.expressSearchKeyword = ''
+      this.filteredExpressList = []
+      this.showOtherSection = false
+      this.loadExpressListFromDB()
       this.$refs.shipPopup.open()
     },
     closeShipDialog() {
@@ -448,9 +596,23 @@ export default {
       this.shipTarget = null
     },
     doSingleShip() {
-      if (!this.shipForm.logistics_company.trim()) {
-        uni.showToast({ title: '请选择快递公司', icon: 'none' })
-        return
+      let companyName = ''
+      let companyCode = ''
+      if (this.shipForm.is_other) {
+        if (!this.shipForm.other_company_name.trim()) {
+          uni.showToast({ title: '请输入快递公司名称', icon: 'none' })
+          return
+        }
+        companyName = this.shipForm.other_company_name.trim()
+        companyCode = ''
+      } else {
+        if (!this.shipForm.logistics_company) {
+          uni.showToast({ title: '请选择快递公司', icon: 'none' })
+          return
+        }
+        const found = this.expressList.find(e => e.code === this.shipForm.logistics_company)
+        companyName = found ? found.name : this.shipForm.logistics_company
+        companyCode = this.shipForm.logistics_company
       }
       if (!this.shipForm.logistics_no.trim()) {
         uni.showToast({ title: '请填写快递单号', icon: 'none' })
@@ -460,9 +622,21 @@ export default {
       db.collection('order').doc(this.shipTarget._id).update({
         status: 2,
         delivery_method: this.shipForm.delivery_method,
-        logistics_company: this.shipForm.logistics_company,
+        logistics_company: companyName,
+        logistics_company_code: companyCode,
         logistics_no: this.shipForm.logistics_no.trim()
-      }).then(() => {
+      }).then(async () => {
+        // 调用快递100订阅
+        if (companyCode) {
+          try {
+            await uniCloud.callFunction({
+              name: 'order-api',
+              data: { action: 'subscribeLogistics', params: { orderId: this.shipTarget._id } }
+            })
+          } catch (e) {
+            console.warn('订阅快递100失败（不影响发货）:', e)
+          }
+        }
         uni.showToast({ title: '发货成功' })
         this.closeShipDialog()
         this.$nextTick(() => { this.$refs.udb.loadData() })
@@ -479,6 +653,7 @@ export default {
       this.batchPreview = []
       this.batchErrorMsg = ''
       this.batchOrdersMap = {}
+      this.batchDefaultCompany = 'yuantong'
       this.$refs.batchShipPopup.open()
     },
     closeBatchShipDialog() {
@@ -519,24 +694,34 @@ export default {
       reader.onload = (e) => {
         try {
           const text = e.target.result
-          const lines = text.trim().split('\n')
+          // 统一换行符后再按行分割
+          const raw = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim()
+          const lines = raw.split('\n')
           if (lines.length < 2) {
-            this.batchErrorMsg = '文件为空或格式错误'
+            this.batchErrorMsg = '文件为空或格式错误，请确保是 CSV 格式'
             return
           }
           const preview = []
           const orderMap = {}
+          // 从第 2 行开始（跳过表头）
           for (let i = 1; i < lines.length; i++) {
-            const cols = lines[i].split(',')
+            const line = lines[i].trim()
+            if (!line) continue
+            // 用逗号分隔，但处理引号包裹的字段
+            const cols = this._parseCSVLine(line)
             if (cols.length < 2) continue
-            const orderId = (cols[0] || '').trim().replace(/"/g, '').trim()
-            const logisticsNo = (cols[1] || '').trim().replace(/"/g, '').trim()
+            const orderId = (cols[0] || '').trim().replace(/^"|"$/g, '').trim()
+            const logisticsNo = (cols[1] || '').trim().replace(/^"|"$/g, '').trim()
+            // 第三列：快递公司编码（可选）
+            const companyCode = cols[2] ? (cols[2] || '').trim().replace(/^"|"$/g, '').trim() : ''
             if (!orderId || !logisticsNo) continue
-            orderMap[orderId] = logisticsNo
-            if (preview.length < 5) preview.push({ orderId, logisticsNo })
+            orderMap[orderId] = { logisticsNo, companyCode }
+            if (preview.length < 5) {
+              preview.push({ orderId, logisticsNo, company: companyCode || '' })
+            }
           }
           if (!Object.keys(orderMap).length) {
-            this.batchErrorMsg = '未解析到有效数据，请确保第一列为订单ID，第二列为物流单号'
+            this.batchErrorMsg = '未解析到有效数据，请检查格式（需包含：订单ID,物流单号）'
             return
           }
           this.batchOrdersMap = orderMap
@@ -548,25 +733,69 @@ export default {
       }
       reader.readAsText(file)
     },
+    // 解析 CSV 一行，处理引号包裹的字段
+    _parseCSVLine(line) {
+      const result = []
+      let current = ''
+      let inQuotes = false
+      for (let i = 0; i < line.length; i++) {
+        const ch = line[i]
+        if (ch === '"') {
+          if (inQuotes && line[i + 1] === '"') {
+            current += '"'
+            i++
+          } else {
+            inQuotes = !inQuotes
+          }
+        } else if (ch === ',' && !inQuotes) {
+          result.push(current)
+          current = ''
+        } else {
+          current += ch
+        }
+      }
+      result.push(current)
+      return result
+    },
     doBatchShip() {
       const orderIds = Object.keys(this.batchOrdersMap)
       if (!orderIds.length) {
         uni.showToast({ title: '请先选择有效文件', icon: 'none' })
         return
       }
+      if (!this.batchDefaultCompany) {
+        uni.showToast({ title: '请选择默认快递公司', icon: 'none' })
+        return
+      }
       uni.showLoading({ mask: true, title: '批量发货中…' })
-      const promises = orderIds.map(id =>
-        db.collection('order').doc(id).update({
+      const promises = orderIds.map(id => {
+        const item = this.batchOrdersMap[id]
+        // 优先用 CSV 第三列的编码，没有则用默认选择
+        const companyCode = item.companyCode || this.batchDefaultCompany
+        const companyName = this.quickExpressOptions.find(e => e.code === companyCode)?.name || companyCode
+        return db.collection('order').doc(id).update({
           status: 2,
-          logistics_no: this.batchOrdersMap[id],
-          logistics_company: 'shunfeng',
-          delivery_method: 1
-        }).catch(() => null)
-      )
-      Promise.all(promises).then(results => {
-        const success = results.filter(Boolean).length
-        const fail = results.filter(r => !r).length
-        uni.showToast({ title: `成功${success}条${fail ? '，失败' + fail + '条' : ''}`, icon: 'none', duration: 3000 })
+          delivery_method: 1,
+          logistics_company: companyName,
+          logistics_company_code: companyCode,
+          logistics_no: item.logisticsNo.trim()
+        }).then(() => ({ id, success: true, companyCode })).catch(() => ({ id, success: false }))
+      })
+      Promise.all(promises).then(async results => {
+        const success = results.filter(r => r.success)
+        const fail = results.filter(r => !r.success)
+        // 批量订阅快递100
+        const subPromises = success
+          .filter(r => r.companyCode)
+          .map(r => uniCloud.callFunction({
+            name: 'order-api',
+            data: { action: 'subscribeLogistics', params: { orderId: r.id } }
+          }).catch(() => null))
+        await Promise.all(subPromises)
+        uni.showToast({
+          title: `成功${success.length}条${fail.length ? '，失败' + fail.length + '条' : ''}`,
+          icon: 'none', duration: 3000
+        })
         this.closeBatchShipDialog()
         this.$nextTick(() => { this.$refs.udb.loadData() })
       }).finally(() => {
@@ -680,7 +909,7 @@ export default {
 .ship-popup {
   background: #fff;
   border-radius: 16px 16px 0 0;
-  max-height: 80vh;
+  max-height: 85vh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -712,20 +941,65 @@ export default {
   padding: 0 4px;
   line-height: 1;
 }
+
+/* 搜索框 */
+.ship-search-wrap {
+  padding: 10px 16px 6px;
+  flex-shrink: 0;
+}
+.ship-search-box {
+  display: flex;
+  align-items: center;
+  background: #f5f5f5;
+  border-radius: 20px;
+  padding: 6px 12px;
+  gap: 8px;
+}
+.icon-search { font-size: 14px; flex-shrink: 0; }
+.icon-clear { font-size: 14px; color: #999; flex-shrink: 0; }
+.ship-search-input {
+  flex: 1;
+  font-size: 13px;
+  color: #333;
+  height: 28px;
+  line-height: 28px;
+}
+
+/* 快递公司区块 */
 .ship-popup-body {
   flex: 1;
   overflow-y: auto;
-  padding: 12px 16px;
+  padding: 8px 16px;
+  max-height: 40vh;
 }
-.ship-popup-footer {
-  padding: 12px 16px;
-  border-top: 1px solid #f0f0f0;
-  flex-shrink: 0;
+.express-section {
+  margin-bottom: 12px;
+}
+.express-section-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  color: #999;
+  margin-bottom: 8px;
+  padding: 0 2px;
+}
+.section-arrow { font-size: 10px; }
+.search-count { color: #999; font-size: 12px; }
+.search-empty {
+  text-align: center;
+  color: #bbb;
+  font-size: 13px;
+  padding: 20px 0;
+}
+.other-input-wrap {
+  margin-top: 8px;
+  padding: 0 2px;
 }
 
 /* 发货表单字段 */
 .ship-field {
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
 .ship-field-label {
   display: block;
@@ -736,7 +1010,7 @@ export default {
 }
 .required { color: #ff4d4f; }
 
-/* 选项列表（配送方式） */
+/* 选项列表 */
 .option-list {
   display: flex;
   flex-wrap: wrap;
@@ -749,31 +1023,46 @@ export default {
 }
 .option-item {
   padding: 6px 14px;
-  border-radius: 4px;
-  border: 1px solid #d9d9d9;
+  border-radius: 18px;
+  border: 1px solid #e8e8e8;
   font-size: 13px;
-  color: #666;
-  background: #fff;
+  color: #555;
+  background: #fafafa;
   cursor: pointer;
   transition: all 0.15s;
+  user-select: none;
+}
+.option-item:hover {
+  border-color: #b3d8ff;
+  background: #e6f4ff;
+  color: #1890ff;
 }
 .option-item-active {
   border-color: #1890ff;
   color: #1890ff;
-  background: #e6f7ff;
+  background: #e6f4ff;
+  font-weight: 500;
 }
 
 /* 确认发货按钮 */
 .ship-confirm-btn {
   width: 100%;
-  background: #1890ff;
+  background: linear-gradient(135deg, #1890ff 0%, #36cfc9 100%);
   color: #fff;
   border: none;
-  border-radius: 6px;
+  border-radius: 24px;
   font-size: 15px;
   height: 44px;
   line-height: 44px;
+  box-shadow: 0 4px 12px rgba(24, 144, 255, 0.3);
 }
+.footer-tip {
+  text-align: center;
+  font-size: 12px;
+  color: #999;
+  margin-bottom: 8px;
+}
+.tip-other { color: #1890ff; font-weight: 500; }
 
 /* 批量发货 */
 .batch-tip { font-size: 13px; color: #666; margin-bottom: 12px; }
@@ -786,6 +1075,22 @@ export default {
   display: flex;
   flex-direction: column;
   gap: 2px;
+}
+/* CSV 模板格式说明 */
+.csv-row {
+  display: flex;
+  gap: 4px;
+  padding: 2px 0;
+  color: #555;
+}
+.csv-row.header {
+  font-weight: bold;
+  color: #333;
+  border-bottom: 1px solid #ddd;
+  margin-bottom: 2px;
+}
+.csv-row text {
+  flex: 1;
 }
 .batch-note { color: #999; }
 .upload-wrap {
@@ -802,13 +1107,66 @@ export default {
   margin-bottom: 8px;
 }
 .batch-preview-title { font-size: 12px; color: #666; margin-bottom: 6px; }
-.batch-preview-row {
+/* 预览表格 */
+.preview-table {
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.preview-th {
   display: flex;
-  justify-content: space-between;
+  background: #f0f0f0;
+  font-size: 11px;
+  font-weight: bold;
+  color: #666;
+}
+.preview-tr {
+  display: flex;
+  border-top: 1px solid #f0f0f0;
   font-size: 11px;
   color: #333;
-  padding: 2px 0;
-  border-bottom: 1px solid #eee;
+}
+.th-cell, .td-cell {
+  flex: 1;
+  padding: 4px 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.td-id { flex: 1.2; color: #888; }
+.td-no { flex: 1.5; color: #1890ff; font-family: monospace; }
+/* 默认快递公司选择 */
+.batch-express-section {
+  margin-top: 8px;
+}
+.batch-express-label {
+  display: block;
+  font-size: 13px;
+  color: #333;
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+.express-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.express-chip {
+  padding: 4px 12px;
+  border-radius: 14px;
+  border: 1px solid #e0e0e0;
+  font-size: 12px;
+  color: #555;
+  background: #fafafa;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.15s;
+}
+.express-chip-active {
+  border-color: #1890ff;
+  color: #1890ff;
+  background: #e6f4ff;
+  font-weight: 500;
 }
 .batch-error { color: #ff4d4f; font-size: 12px; }
 </style>
