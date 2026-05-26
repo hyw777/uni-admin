@@ -98,6 +98,11 @@ export default {
 				icon: 'admin-icons-chart',
 				value: '/pages/redemption/statistics',
 			}]
+		}, {
+			menu_id: "freight-template",
+			text: '运费管理',
+			icon: 'admin-icons-truck',
+			value: '/pages/freight_template/list',
 		}]
 	},
 	uniStat: {

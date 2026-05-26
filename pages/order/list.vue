@@ -10,6 +10,7 @@
         <input class="uni-search" type="text" v-model="query" @confirm="doSearch" placeholder="搜索订单号/商品/收货人" />
         <button class="uni-button" type="default" size="mini" @click="doSearch">搜索</button>
         <button class="uni-button" type="primary" size="mini" @click="openBatchShip">批量发货</button>
+        <button class="uni-button" type="warn" size="mini" :disabled="!selectedIndexs.length" @click="delTable">批量删除</button>
         <download-excel class="hide-on-phone" :fields="exportExcel.fields" :data="exportExcelData" :type="exportExcel.type" :name="exportExcel.filename">
           <button class="uni-button" type="default" size="mini">导出</button>
         </download-excel>
@@ -486,11 +487,22 @@ export default {
       this.$nextTick(() => { this.$refs.udb.loadData() })
     },
     confirmDelete(id) {
-      uni.showModal({
-        title: '确认删除',
-        content: '确定删除该订单？此操作不可恢复',
+      this.$refs.udb.remove(id, {
         success: (res) => {
-          if (res.confirm) this.$refs.udb.remove(id)
+          this.$refs.table.clearSelection()
+        }
+      })
+    },
+    delTable() {
+      if (!this.selectedIndexs.length) {
+        uni.showToast({ title: '请选择要删除的订单', icon: 'none' })
+        return
+      }
+      const ids = this.selectedIndexs.map(i => this.exportExcelData[i]._id)
+      this.$refs.udb.remove(ids, {
+        success: (res) => {
+          this.$refs.table.clearSelection()
+          this.selectedIndexs = []
         }
       })
     },
